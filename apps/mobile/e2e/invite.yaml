@@ -1,0 +1,16 @@
+# Requires a signed development/preview build and fixture values from scripts/create-e2e-fixture.ts.
+appId: com.caboforfun.app
+---
+- launchApp:
+    clearState: true
+- openLink: cabo://join/${INVITE_TOKEN}
+- assertVisible: Welcome back.
+- tapOn: Email
+- inputText: ${EMAIL}
+- tapOn: Password.*
+- inputText: ${PASSWORD}
+- tapOn: Log in
+- assertVisible: Pull up a chair.
+- assertVisible: Share Invite
+- tapOn: I’m ready
+- assertVisible: Not ready

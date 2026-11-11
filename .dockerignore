@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.env*
+**/.env*
+**/.expo
+**/android
+**/ios
+coverage
+**/*.jks
+**/*.keystore
+**/credentials.json
+**/google-services.json
+**/service-account*.json
+**/*.apk
+**/*.aab

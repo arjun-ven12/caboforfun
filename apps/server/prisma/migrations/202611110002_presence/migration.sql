@@ -1,0 +1,1 @@
+ALTER TABLE "Profile" ADD COLUMN "online" BOOLEAN NOT NULL DEFAULT false;

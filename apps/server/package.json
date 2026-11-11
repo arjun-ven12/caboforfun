@@ -1,0 +1,38 @@
+{
+  "name": "@cabo/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "build": "tsc --noEmit && tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "node --env-file-if-exists=../../.env ../../node_modules/prisma/build/index.js generate",
+    "db:migrate": "node --env-file-if-exists=../../.env ../../node_modules/prisma/build/index.js migrate deploy"
+  },
+  "dependencies": {
+    "@cabo/shared": "1.0.0",
+    "@prisma/client": "6.19.3",
+    "prisma": "6.19.3",
+    "@better-auth/expo": "1.7.20",
+    "better-auth": "1.7.20",
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1",
+    "cors": "^2.8.5",
+    "helmet": "^8.1.0",
+    "express-rate-limit": "^8.1.0",
+    "pino": "^9.9.0",
+    "nodemailer": "10.5.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/cors": "^2.8.19",
+    "@types/nodemailer": "^7.0.0",
+    "tsup": "^8.5.0",
+    "socket.io-client": "^4.8.1",
+    "supertest": "^7.1.4",
+    "@types/supertest": "^6.0.3"
+  }
+}

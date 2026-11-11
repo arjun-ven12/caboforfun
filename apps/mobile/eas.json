@@ -1,0 +1,38 @@
+{
+  "cli": {
+    "version": ">=16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development"
+    },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "CABO_RELEASE_BUILD": "1"
+      },
+      "node": "22.23.4"
+    },
+    "production": {
+      "autoIncrement": true,
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "CABO_RELEASE_BUILD": "1"
+      },
+      "node": "22.23.4"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

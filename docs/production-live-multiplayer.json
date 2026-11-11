@@ -1,0 +1,95 @@
+{
+  "checkedAt": "2026-11-11T07:00:00.546Z",
+  "apiUrl": "https://cabo-api-production.up.railway.app",
+  "transport": "Two programmatic Socket.IO clients over HTTPS/WSS; not Android devices",
+  "status": "passed",
+  "turns": 25,
+  "powers": [
+    "Q",
+    "8",
+    "J",
+    "10",
+    "7",
+    "9",
+    "blackKingKeep",
+    "blackKingSwap"
+  ],
+  "checks": [
+    {
+      "name": "Two authenticated HTTPS/WSS clients",
+      "status": "passed"
+    },
+    {
+      "name": "Friendship, duplicate rejection and acceptance",
+      "status": "passed"
+    },
+    {
+      "name": "Friend challenge, HTTPS invitation and token-authorized lobby join",
+      "status": "passed"
+    },
+    {
+      "name": "Default 54-card rules, synchronized settings and immutable match snapshot",
+      "status": "passed"
+    },
+    {
+      "name": "Exactly two private initial cards and ready-gated memorization",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability 7",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability 8",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability 9",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability 10",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability J",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability Q",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability blackKingKeep",
+      "status": "passed"
+    },
+    {
+      "name": "Live custom ability blackKingSwap",
+      "status": "passed"
+    },
+    {
+      "name": "Incorrect multi-card replacement",
+      "status": "passed"
+    },
+    {
+      "name": "Successful multi-card replacement",
+      "status": "passed"
+    },
+    {
+      "name": "Disconnect/reconnect retains exact pending draw and state version",
+      "status": "passed"
+    },
+    {
+      "name": "Cabo final-turn count, revealed hand scoring and five-point failed-call penalty",
+      "status": "passed"
+    },
+    {
+      "name": "Explicit rematch consent, new match and reset scores/secrets",
+      "status": "passed"
+    },
+    {
+      "name": "Both completed matches appear in history",
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "checkedAt": "2026-11-11T07:19:53.230Z",
+  "apiUrl": "https://cabo-api-production.up.railway.app",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "HTTPS health and PostgreSQL readiness",
+      "status": "passed"
+    },
+    {
+      "name": "Unauthenticated REST rejected",
+      "status": "passed"
+    },
+    {
+      "name": "WSS Socket.IO endpoint rejects unauthenticated handshake",
+      "status": "passed"
+    },
+    {
+      "name": "Android association endpoint has the correct package",
+      "status": "passed"
+    },
+    {
+      "name": "Android association matches registered APK signing certificate",
+      "status": "passed"
+    },
+    {
+      "name": "Android signing fingerprint",
+      "status": "configured_not_device_verified"
+    },
+    {
+      "name": "Email/password sign-in",
+      "status": "passed"
+    },
+    {
+      "name": "Server-issued session cookie",
+      "status": "passed"
+    },
+    {
+      "name": "Authenticated REST session",
+      "status": "passed"
+    },
+    {
+      "name": "Authenticated WSS connection",
+      "status": "passed"
+    },
+    {
+      "name": "Create private lobby",
+      "status": "passed"
+    },
+    {
+      "name": "Authorized socket acknowledgement and state synchronization",
+      "status": "passed"
+    },
+    {
+      "name": "Secure logout",
+      "status": "passed"
+    },
+    {
+      "name": "Open socket rejects revoked session",
+      "status": "passed"
+    }
+  ]
+}
