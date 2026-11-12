@@ -196,6 +196,20 @@ export function remember(
         delete m.beliefs[k];
       }
     }
+  if (v.publicReveal) {
+    const owner = v.publicReveal.owner,
+      p = v.players.find((p) => p.id === owner)!;
+    for (const slot of v.publicReveal.cards) {
+      if (!p.cards[slot.index]) continue;
+      const k = slotKey(owner, slot.index);
+      m.slots[k] = {
+        card: structuredClone(slot.card),
+        confidence: 1,
+        revision: p.cards[slot.index].revision,
+      };
+      delete m.beliefs[k];
+    }
+  }
   if (v.reveal) {
     const p = v.players.find((p) => p.id === v.reveal!.owner)!,
       k = slotKey(p.id, v.reveal.index);

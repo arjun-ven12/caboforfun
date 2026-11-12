@@ -361,8 +361,29 @@ describe("observed public replacement memory", () => {
   });
   it("never confuses an unseen failed-match penalty with the previously drawn card", () => {
     const f = fixture({ ...customRules, failedMatch: "drawPenalty" });
+    const opponentMemory = remember(
+      playerView(f.game, "b"),
+      "b",
+      undefined,
+      botPresets.master,
+      () => 0.5,
+    );
     f.step("a", { type: "replace", indices: [0, 2] });
     expect(f.game.players[0].hand).toHaveLength(5);
+    const observed = remember(
+      playerView(f.game, "b"),
+      "b",
+      opponentMemory,
+      botPresets.master,
+      () => 0.5,
+    );
+    expect(observed.slots[slotKey("a", 0)].card?.id).toBe(
+      f.game.players[0].hand[0].id,
+    );
+    expect(observed.slots[slotKey("a", 2)].card?.id).toBe(
+      f.game.players[0].hand[2].id,
+    );
+    expect(observed.slots[slotKey("a", 1)]?.card).toBeUndefined();
     expect(f.memory.slots[slotKey("a", 4)]?.card).toBeUndefined();
   });
   it("remembers the kept draw after an official failed match", () => {
