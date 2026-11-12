@@ -1,12 +1,12 @@
 {
-  "buildId": "fd550347-1ca4-44b6-94f5-ff0afb58e2ae",
+  "buildId": "9d84db20-7690-4f8e-9f07-3f907f626746",
   "status": "FINISHED",
-  "artifactUrl": "https://expo.dev/artifacts/eas/yOKyJra5j6QfLNEHbWDZqR4NwI9MG-T1u3fvoqsmyQY.apk",
-  "sizeBytes": 100943304,
-  "sha256": "6903baf468c14c96716e4cf16feac9c4be22a4a81359091fbc783b7c2536a516",
+  "artifactUrl": "https://expo.dev/artifacts/eas/Jko9eYbqCBjrNCiGZqzLNIqHZ85GyAc4jMJdOD8JPmA.apk",
+  "sizeBytes": 100992476,
+  "sha256": "e9cfe8060f537fc08850cd769746b8890453bec80e9d26b0a8ae64547247978a",
   "appIdentifier": "com.caboforfun.app",
-  "appVersion": "1.1.0",
-  "versionCode": "3",
+  "appVersion": "1.2.0",
+  "versionCode": "5",
   "signatureVerified": true,
   "signatureScheme": "APK Signature Scheme v2",
   "signingCertificateSha256": [
@@ -21,8 +21,10 @@
   "appLinkHost": "cabo-api-production.up.railway.app",
   "appLinkPathPrefix": "/join/",
   "realDeviceTested": false,
-  "githubReleaseTag": "v1.1.0-preview.1",
-  "githubReleaseUrl": "https://github.com/arjun-ven12/caboforfun/releases/tag/v1.1.0-preview.1",
-  "githubArtifactUrl": "https://github.com/arjun-ven12/caboforfun/releases/download/v1.1.0-preview.1/cabo-android-v1.1.0-preview.apk",
-  "sourceCommit": "790c8d1"
+  "githubReleaseTag": "v1.2.0-preview.1",
+  "githubReleaseUrl": "https://github.com/arjun-ven12/caboforfun/releases/tag/v1.2.0-preview.1",
+  "githubArtifactUrl": "https://github.com/arjun-ven12/caboforfun/releases/download/v1.2.0-preview.1/cabo-android-v1.2.0-preview.apk",
+  "mobileSourceCommit": "1bb2460",
+  "easFingerprint": "974b54034725a30d4de8c2de37652acc988b7f61",
+  "botUIInBundle": true
 }

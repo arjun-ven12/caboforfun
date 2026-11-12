@@ -283,6 +283,21 @@ try {
   pass(
     "Mixed human/bot room completion; multiplayer pause/practice rejected; rankings kept separate",
   );
+  const configured = (await room(mixed.id)).bots[0];
+  for (const who of [0, 1])
+    await ok(`/api/rooms/${mixed.id}/ready`, who, { ready: true });
+  await ok(
+    `/api/rooms/${mixed.id}/bots/${configured.id}`,
+    0,
+    { name: configured.name, config: presets.master },
+    "PUT",
+  );
+  assert(
+    (await http(`/api/rooms/${mixed.id}/start`, 0, { rematch: true }))
+      .status === 400,
+    "Changed bot configuration reused old human consent",
+  );
+  pass("Bot configuration changes clear human rematch readiness");
   pass(
     "Private bot observations and memory absent from every observed human socket/API view",
   );

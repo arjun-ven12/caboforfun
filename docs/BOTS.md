@@ -123,3 +123,7 @@ Background push, OAuth, password-recovery mail and iOS distribution retain their
 | `packages/shared/src/protocol.ts`                               | AI identity metadata and match epoch for ordered synchronization.                                          |
 | `scripts/benchmark-bots.ts`                                     | Paired-seat calibration, compatibility and performance report.                                             |
 | `scripts/verify-bots-live.mjs`                                  | Controlled real HTTP/WSS solo and mixed-game acceptance.                                                   |
+
+Final live verification also confirms that changing a bot configuration clears previously accepted human rematch readiness. The signed Android 1.2.0/code 5 artifact was independently verified; see the deployment record.
+
+Additional release evidence files: `deploy/android-preview.json` (verified APK metadata), `deploy/production.json` (public build/download target), `docs/GITHUB_RELEASE.md` (installation/signature record), `docs/DEPLOYMENT_STATUS.md` (current production evidence), `docs/PRODUCTION_DEPLOYMENT.md` (current APK link).

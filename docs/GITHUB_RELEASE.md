@@ -1,19 +1,21 @@
-# Android preview release 1.1
+# Android preview 1.2 — AI opponents
 
-Release: [v1.1.0-preview.1](https://github.com/arjun-ven12/caboforfun/releases/tag/v1.1.0-preview.1)
+[Download signed APK](https://github.com/arjun-ven12/caboforfun/releases/download/v1.2.0-preview.1/cabo-android-v1.2.0-preview.apk) · [GitHub release](https://github.com/arjun-ven12/caboforfun/releases/tag/v1.2.0-preview.1) · [Official EAS build](https://expo.dev/accounts/jishnuava/projects/cabo-for-fun/builds/9d84db20-7690-4f8e-9f07-3f907f626746)
 
-[Download the signed Android APK](https://github.com/arjun-ven12/caboforfun/releases/download/v1.1.0-preview.1/cabo-android-v1.1.0-preview.apk) · [Official EAS build](https://expo.dev/accounts/jishnuava/projects/cabo-for-fun/builds/fd550347-1ca4-44b6-94f5-ff0afb58e2ae)
+Version **1.2.0**, Android versionCode **5**. The same signing certificate allows updating the previous preview without uninstalling. Use this build on all participating phones.
 
-Application version **1.1.0**, Android versionCode **3**. This prerelease updates the existing app with private-safe real-time swap feedback, bounded outgoing-card bonus powers and canonical unique usernames. Both phones should use this APK.
+This release adds Play vs AI, 1–4 bot opponents, five presets/custom difficulty and personalities, saved configurations, legitimate card memory, server-hosted solo/mixed games, bonus-compatible actions, pause/resume/restart, practice hints, separate statistics and rematches. **Offline play is deferred.** No LLM provider/key is needed.
 
-Assets: `cabo-android-v1.1.0-preview.apk`, `SHA256SUMS.txt`, `android-preview.json`. The EAS APK is distributed unchanged as a GitHub release asset, never a Git blob. Its SHA-256 is:
+Assets: `cabo-android-v1.2.0-preview.apk`, `SHA256SUMS.txt`, `android-preview.json`. The APK is an unchanged EAS artifact, distributed as a release asset rather than a Git blob.
+
+SHA-256:
 
 ```
-6903baf468c14c96716e4cf16feac9c4be22a4a81359091fbc783b7c2536a516
+e9cfe8060f537fc08850cd769746b8890453bec80e9d26b0a8ae64547247978a
 ```
 
-Independent Android apksig verification succeeded with the same signing certificate as 1.0.0. Manifest checks confirm package `com.caboforfun.app`, API 24 minimum/36 target, versionCode 3, verified HTTPS `/join/` intent, and debuggable/testOnly false. The embedded standalone Hermes bundle contains the live backend URL, the new bonus/feedback UI, and no localhost API fallback.
+Independent apksig and manifest checks passed: package `com.caboforfun.app`, version 1.2.0/code 5, min API 24/target 36, v2 signature, correct HTTPS `/join/` intent, debuggable/testOnly false. The standalone Hermes bundle contains the live backend URL and AI UI; no localhost API fallback is present.
 
-Validation: 92 regression tests, 14 release guards, GitHub clean-install CI, production migration, live default-power multiplayer lifecycle and separate blind-swap/Black King outgoing-bonus reconnect checks. See [the file-level change and behavior report](SWAP_RELEASE_1.1.md).
+Validation: 115 automated tests, 14 release guards, clean GitHub CI, production migration, real authenticated solo/mixed smoke tests and 10,150 seeded bot matches. See [changed files, architecture, measurements and limitations](BOTS.md). The benchmark does not establish that Master is stronger than Expert. Native device appearance, haptics, OS links and measured FPS remain unverified; follow [the device acceptance plan](ANDROID_ACCEPTANCE.md).
 
-Physical Android installation, visual motion/haptics and OS link handoff remain unverified. Execute [the two-device acceptance plan](ANDROID_ACCEPTANCE.md). Email/password users do not need confirmation email. Optional OAuth, email recovery and background push retain their external setup requirements. Database credentials, backend auth secrets, sessions and signing keys are excluded from Git.
+The backend is https://cabo-api-production.up.railway.app. Email/password accounts require no confirmation email. Optional OAuth, recovery mail and background push retain their external setup requirements. Secrets, sessions, signing keys and private snapshots are excluded from Git.
