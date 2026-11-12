@@ -63,6 +63,7 @@ const labels: Record<Ability, string> = {
   lookSwap: "Look & Swap",
 };
 const numbers: [keyof Rules, string, number, number][] = [
+  ["maxBonusActions", "Maximum bonus actions per turn", 1, 8],
   ["startingCards", "Starting cards", 1, 8],
   ["initialPeek", "Initially inspected", 0, 8],
   ["memorySeconds", "Memorization seconds", 0, 120],
@@ -95,8 +96,13 @@ function Summary({ r }: { r: Rules }) {
         Exhaustion: {r.exhaustion}
       </Txt>
       <Txt muted>
-        Cabo timing: {r.caboTiming}. Card powers only from a deck draw.
-        Inspected look-and-swap cards{" "}
+        Cabo timing: {r.caboTiming}. Card powers from a deck draw
+        {r.activateSwappedOutAbilities ? " and outgoing swap cards" : " only"}.
+        Bonus chaining{" "}
+        {r.chainSwapBonuses
+          ? `enabled, maximum ${r.maxBonusActions}`
+          : "disabled"}
+        . Inspected look-and-swap cards{" "}
         {r.optionalSwap ? "may optionally" : "must"} be swapped. Extended
         absence{" "}
         {r.disconnectPolicy === "pause"
@@ -286,6 +292,8 @@ export default function RulesEditor() {
             [
               "matching",
               "abilities",
+              "activateSwappedOutAbilities",
+              "chainSwapBonuses",
               "optionalSwap",
               "peekOpponentCanSwap",
             ] as const
@@ -296,9 +304,13 @@ export default function RulesEditor() {
                   ? "Allow matching replacements"
                   : key === "abilities"
                     ? "Enable card powers"
-                    : key === "peekOpponentCanSwap"
-                      ? "Opponent peeks can become swaps"
-                      : "Optional swap after looking"}
+                    : key === "activateSwappedOutAbilities"
+                      ? "Activate swapped-out card abilities"
+                      : key === "chainSwapBonuses"
+                        ? "Allow bounded bonus-action chaining"
+                        : key === "peekOpponentCanSwap"
+                          ? "Opponent peeks can become swaps"
+                          : "Optional swap after looking"}
               </Txt>
               <Switch
                 accessibilityLabel={key}

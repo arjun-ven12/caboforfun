@@ -1,8 +1,14 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { fromNodeHeaders } from "better-auth/node";
-import { GameError, type ClientEvents, type ServerEvents } from "@cabo/shared";
+import {
+  GameError,
+  type ClientEvents,
+  type ServerEvents,
+  type SwapEvent,
+} from "@cabo/shared";
 import { createApp, logger } from "./app.js";
+import { setIdentityPublisher } from "./identity.js";
 import { db } from "./db.js";
 import { auth } from "./auth.js";
 import { config, origins } from "./config.js";
@@ -24,7 +30,7 @@ const io = new Server<ClientEvents, ServerEvents>(http, {
 const sockets = new Map<string, Set<string>>();
 setOnlineLookup((userId) => !!sockets.get(userId)?.size);
 const turnNotifications = new Map<string, string>();
-async function publish(roomId: string) {
+async function publish(roomId: string, events: SwapEvent[] = []) {
   const members = await db.roomMember.findMany({ where: { roomId } });
   for (const m of members) {
     const ids = sockets.get(m.userId);
@@ -32,7 +38,22 @@ async function publish(roomId: string) {
     const view = await roomView(roomId, m.userId);
     for (const id of ids) {
       io.to(id).emit("room:changed", { roomId });
-      if (view.game) io.to(id).emit("game:state", { ...view.game, roomId });
+      if (view.game) {
+        io.to(id).emit("game:state", {
+          ...view.game,
+          roomId,
+          serverTime: Date.now(),
+        });
+        for (const event of events)
+          io.to(id).emit("game:swap", {
+            roomId,
+            matchId: view.game.matchId,
+            event,
+            actor: view.game.identities[event.actorId],
+            opponent: view.game.identities[event.opponentId],
+            serverTime: Date.now(),
+          });
+      }
     }
   }
   const room = await db.room.findUnique({ where: { id: roomId } });
@@ -62,6 +83,36 @@ async function publish(roomId: string) {
   }
 }
 setPublisher(publish);
+setIdentityPublisher(async (identity) => {
+  const friends = await db.socialEdge.findMany({
+    where: {
+      kind: { in: ["friend", "request"] },
+      OR: [{ fromId: identity.userId }, { toId: identity.userId }],
+    },
+  });
+  const matches = await db.matchParticipant.findMany({
+    where: { match: { participants: { some: { userId: identity.userId } } } },
+    select: { userId: true },
+  });
+  const members = await db.roomMember.findMany({
+    where: { room: { members: { some: { userId: identity.userId } } } },
+    select: { userId: true },
+  });
+  const invitations = await db.invitation.findMany({
+    where: { OR: [{ fromId: identity.userId }, { toId: identity.userId }] },
+    select: { fromId: true, toId: true },
+  });
+  const viewers = new Set([
+    identity.userId,
+    ...invitations.flatMap((i) => [i.fromId, ...(i.toId ? [i.toId] : [])]),
+    ...friends.flatMap((f) => [f.fromId, f.toId]),
+    ...matches.map((p) => p.userId),
+    ...members.map((m) => m.userId),
+  ]);
+  for (const user of viewers)
+    for (const socketId of sockets.get(user) || [])
+      io.to(socketId).emit("profile:updated", identity);
+});
 setNotificationEmitter((userId, n) => {
   for (const id of sockets.get(userId) || []) io.to(id).emit("notification", n);
 });
@@ -135,9 +186,9 @@ io.on("connection", (socket) => {
     try {
       if (!allowed()) throw new ServiceError("RATE_LIMIT");
       await validateSession();
-      const view = await command(userId, input);
-      ack({ ok: true, data: view });
-      await publish(input.roomId);
+      const result = await command(userId, input);
+      ack({ ok: true, data: result.view });
+      await publish(input.roomId, result.events);
     } catch (e) {
       ack({
         ok: false,

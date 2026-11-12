@@ -14,6 +14,7 @@ import { db, json } from "./db.js";
 import { check, locked, member, roomView, startMatch } from "./game-service.js";
 import { blocked, requestFriend, respondFriend, blockUser } from "./social.js";
 import { notify } from "./notifications.js";
+import { identities, publishIdentity } from "./identity.js";
 import { config } from "./config.js";
 export const api = Router();
 export const hash = (token: string) =>
@@ -72,13 +73,20 @@ api.put("/profile", async (req, res) => {
       presenceVisible: z.boolean().default(true),
     })
     .parse(req.body);
-  res.json(
-    await db.profile.upsert({
+  const profile = await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('cabo-profile-username-allocation'))`;
+    const owner = await tx.profile.findUnique({
+      where: { username: v.username },
+    });
+    check(!owner || owner.userId === uid(res), "USERNAME_TAKEN", 409);
+    return tx.profile.upsert({
       where: { userId: uid(res) },
       create: { userId: uid(res), ...v, online: true },
       update: { ...v, online: true, lastSeen: new Date() },
-    }),
-  );
+    });
+  });
+  await publishIdentity(uid(res));
+  res.json(profile);
 });
 api.get("/users", async (req, res) => {
   const q = z.string().min(2).max(24).parse(req.query.q);
@@ -123,9 +131,13 @@ api.get("/friends", async (_req, res) => {
 api.post("/friends/requests", async (req, res) => {
   const to = idSchema.parse(req.body.userId);
   res.json(await requestFriend(uid(res), to));
-  void notify(to, "friend_request", "You have a new friend request.").catch(
-    () => {},
-  );
+  void notify(
+    to,
+    "friend_request",
+    "You have a new friend request.",
+    undefined,
+    uid(res),
+  ).catch(() => {});
 });
 api.post("/friends/requests/:id", async (req, res) => {
   await respondFriend(uid(res), param(req), z.boolean().parse(req.body.accept));
@@ -157,10 +169,18 @@ api.delete("/friends/:id/block", async (req, res) => {
 api.get("/rules", async (_req, res) =>
   res.json({
     builtIn: presets,
-    saved: await db.rulePreset.findMany({
-      where: { userId: uid(res) },
-      include: { versions: { orderBy: { createdAt: "desc" }, take: 1 } },
-    }),
+    saved: (
+      await db.rulePreset.findMany({
+        where: { userId: uid(res) },
+        include: { versions: { orderBy: { createdAt: "desc" }, take: 1 } },
+      })
+    ).map((p) => ({
+      ...p,
+      versions: p.versions.map((v) => ({
+        ...v,
+        rules: rulesSchema.parse(v.rules),
+      })),
+    })),
   }),
 );
 api.post("/rules", async (req, res) => {
@@ -289,6 +309,7 @@ api.post("/rooms/join", async (req, res) => {
       "invitation_accepted",
       "A player joined your table.",
       roomId,
+      uid(res),
     ).catch(() => {});
   res.json({ id: roomId });
 });
@@ -351,6 +372,7 @@ api.post("/rooms/:id/ready", async (req, res) => {
           ? "A player would like to play again."
           : "A player is ready at your table.",
         roomId,
+        uid(res),
       ).catch(() => {});
   }
 
@@ -430,6 +452,7 @@ api.post("/rooms/:id/invites", async (req, res) => {
       "challenge",
       "You have been invited to a CABO game.",
       roomId,
+      uid(res),
     ).catch(() => {});
   res.json({
     id: invite.id,
@@ -451,6 +474,13 @@ api.get("/invites", async (_req, res) =>
         id: true,
         roomId: true,
         fromId: true,
+        from: {
+          select: {
+            id: true,
+            name: true,
+            profile: { select: { username: true, displayName: true } },
+          },
+        },
         expiresAt: true,
         room: { select: { code: true } },
       },
@@ -482,25 +512,24 @@ api.delete("/invites/:id", async (req, res) => {
   });
   res.json({ ok: true });
 });
-api.get("/matches", async (_req, res) =>
-  res.json(
-    await db.matchParticipant.findMany({
-      where: { userId: uid(res), match: { completedAt: { not: null } } },
-      include: {
-        match: {
-          select: {
-            id: true,
-            createdAt: true,
-            completedAt: true,
-            rounds: true,
-          },
-        },
+api.get("/matches", async (_req, res) => {
+  const rows = await db.matchParticipant.findMany({
+    where: { userId: uid(res), match: { completedAt: { not: null } } },
+    include: {
+      match: {
+        include: { rounds: true, participants: { select: { userId: true } } },
       },
-      orderBy: { match: { createdAt: "desc" } },
-      take: 50,
-    }),
-  ),
-);
+    },
+    orderBy: { match: { createdAt: "desc" } },
+    take: 50,
+  });
+  const people = await identities(
+    rows.flatMap((r) => r.match.participants.map((p) => p.userId)),
+  );
+  res.json(
+    rows.map((r) => ({ ...r, match: { ...r.match, identities: people } })),
+  );
+});
 api.get("/stats", async (_req, res) => {
   const matches = await db.matchParticipant.findMany({
     where: { userId: uid(res), match: { completedAt: { not: null } } },
@@ -531,6 +560,15 @@ api.get("/notifications", async (_req, res) =>
   res.json(
     await db.notification.findMany({
       where: { userId: uid(res) },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            profile: { select: { username: true, displayName: true } },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),

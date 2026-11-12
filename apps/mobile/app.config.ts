@@ -12,7 +12,7 @@ const config: ExpoConfig = {
   owner: process.env.EXPO_OWNER || deployment.expoOwner,
   slug: "cabo-for-fun",
   scheme: "cabo",
-  version: "1.0.0",
+  version: "1.1.0",
   orientation: "portrait",
   userInterfaceStyle: "automatic",
   icon: "./assets/icon.png",

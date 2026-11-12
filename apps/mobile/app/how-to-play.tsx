@@ -4,6 +4,16 @@ import { Screen, Title, Panel, Txt, Row } from "../src/ui";
 export default function How() {
   return (
     <Screen>
+      <Panel>
+        <Txt size={19}>A swap can grant a bonus.</Txt>
+        <Txt muted>
+          In My Custom Cabo, a special card leaving your hand in a swap grants
+          its power, even if it was face down. Finish that private action before
+          the turn advances. A bonus swap grants no further bonus by default. A
+          declined swap grants nothing. Advanced Rules can disable this or allow
+          a chain of at most eight bonus actions.
+        </Txt>
+      </Panel>
       <Title
         eyebrow="My Custom Cabo · default"
         title="A little memory.\nA little nerve."

@@ -3,7 +3,7 @@ import { Share, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import * as Crypto from "expo-crypto";
-import type { Command, PlayerView } from "@cabo/shared";
+import type { Command, PlayerView, SwapNotification } from "@cabo/shared";
 import { auth, api, connect, queryClient } from "../../src/client";
 import {
   Screen,
@@ -16,16 +16,22 @@ import {
   ErrorText,
   useTheme,
 } from "../../src/ui";
+import { Identity } from "../../src/swap-feedback";
 import { Table } from "../../src/table";
 export default function Room() {
   const { id } = useLocalSearchParams<{ id: string }>(),
     { data: session } = auth.useSession(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),
-    [online, setOnline] = useState(false);
+    [online, setOnline] = useState(false),
+    [clockOffset, setClockOffset] = useState(0);
   const q = useQuery({
     queryKey: ["room", id],
-    queryFn: () => api(`/rooms/${id}`),
+    queryFn: async () => {
+      const data = await api(`/rooms/${id}`);
+      if (data.serverTime) setClockOffset(data.serverTime - Date.now());
+      return data;
+    },
     enabled: !!session,
     refetchOnMount: "always",
   });
@@ -39,19 +45,46 @@ export default function Room() {
       void q.refetch();
     };
     const down = () => setOnline(false);
-    const state = (view: PlayerView & { roomId: string }) => {
+    const state = (
+      view: PlayerView & { roomId: string; serverTime: number },
+    ) => {
       if (view.roomId !== id) return;
+      setClockOffset(view.serverTime - Date.now());
       queryClient.setQueryData(["room", id], (old: any) =>
         old && (!old.game || view.version >= old.game.version)
           ? { ...old, game: view }
           : old,
       );
     };
+    const swapped = (n: SwapNotification) => {
+      if (n.roomId !== id) return;
+      queryClient.setQueryData(["room", id], (old: any) => {
+        if (!old?.game || old.game.matchId !== n.matchId) return old;
+        const history = old.game.swapHistory as SwapNotification["event"][];
+        if (history.some((e) => e.id === n.event.id)) return old;
+        return {
+          ...old,
+          game: {
+            ...old.game,
+            swapHistory: [...history, n.event]
+              .sort((a, b) => a.sequence - b.sequence)
+              .slice(-50),
+            identities: {
+              ...old.game.identities,
+              [n.actor.userId]: n.actor,
+              [n.opponent.userId]: n.opponent,
+            },
+          },
+        };
+      });
+    };
+    s.on("game:swap", swapped);
     s.on("connect", sync);
     s.on("disconnect", down);
     s.on("game:state", state);
     setOnline(s.connected);
     return () => {
+      s.off("game:swap", swapped);
       s.off("connect", sync);
       s.off("disconnect", down);
       s.off("game:state", state);
@@ -144,9 +177,13 @@ export default function Room() {
       {r.game ? (
         <Table
           game={r.game}
+          clockOffset={clockOffset}
           userId={session.user.id}
           names={Object.fromEntries(
-            r.members.map((m: any) => [m.userId, m.name]),
+            Object.values(r.game.identities).map((m: any) => [
+              m.userId,
+              m.displayName,
+            ]),
           )}
           send={send}
           busy={busy || !!r.game.pausedAt}
@@ -160,10 +197,13 @@ export default function Room() {
           <Panel>
             {r.members.map((m: any) => (
               <Row key={m.userId}>
-                <Txt>
-                  {m.name}
-                  {m.userId === r.hostId ? " · host" : ""}
-                </Txt>
+                <Identity
+                  person={{
+                    userId: m.userId,
+                    displayName: m.displayName || m.name,
+                    username: m.username,
+                  }}
+                />
                 <Txt muted size={13}>
                   {m.ready ? "Ready" : "Getting settled"}
                 </Txt>
@@ -220,6 +260,20 @@ export default function Room() {
       {r.status === "finished" && (
         <Panel>
           <Txt size={20}>Another round together?</Txt>
+          {r.members.map((m: any) => (
+            <Row key={m.userId}>
+              <Identity
+                person={{
+                  userId: m.userId,
+                  displayName: m.displayName || m.name,
+                  username: m.username,
+                }}
+              />
+              <Txt muted size={12}>
+                {m.rematch ? "Accepted" : "Deciding"}
+              </Txt>
+            </Row>
+          ))}
           <Txt muted>
             {r.members.filter((m: any) => m.rematch).length} of{" "}
             {r.members.length} players accepted

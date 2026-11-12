@@ -75,13 +75,22 @@ export default function Activity() {
                 <Txt key={r.id} size={13} muted>
                   Round {r.number} ·{" "}
                   {r.scores
-                    .map((s: any) => `${s.raw} hand / ${s.total} round`)
+                    .map(
+                      (s: any) =>
+                        `${item.match.identities?.[s.id]?.displayName || "Former player"} ${item.match.identities?.[s.id]?.username ? `@${item.match.identities[s.id].username}` : ""}: ${s.raw} hand / ${s.total} round`,
+                    )
                     .join(" · ")}
                 </Txt>
               ))}
             </>
           ) : path === "invites" ? (
             <>
+              <Txt>
+                {item.from?.profile?.displayName || item.from?.name}{" "}
+                {item.from?.profile?.username
+                  ? `@${item.from.profile.username}`
+                  : ""}
+              </Txt>
               <Txt size={20}>A seat at table {item.room.code}</Txt>
               <Button
                 title="Accept invitation"
@@ -109,6 +118,11 @@ export default function Activity() {
           ) : (
             <>
               <Txt>{item.body}</Txt>
+              {item.actor?.profile?.username && (
+                <Txt muted size={12}>
+                  @{item.actor.profile.username}
+                </Txt>
+              )}
               <Txt muted size={12}>
                 {new Date(item.createdAt).toLocaleString()}
               </Txt>

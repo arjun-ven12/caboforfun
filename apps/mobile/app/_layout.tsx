@@ -30,9 +30,13 @@ export default function Layout() {
       const s = connect();
       s.off("room:changed");
       s.off("notification");
+      s.off("profile:updated");
       s.on("room:changed", ({ roomId }) => {
         void queryClient.invalidateQueries({ queryKey: ["room", roomId] });
         void queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      });
+      s.on("profile:updated", () => {
+        void queryClient.invalidateQueries();
       });
       s.on("notification", (n) => {
         void queryClient.invalidateQueries();

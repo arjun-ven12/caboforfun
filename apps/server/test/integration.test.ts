@@ -2,7 +2,13 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { io, type Socket } from "socket.io-client";
-import { customRules, type PlayerView } from "@cabo/shared";
+import { PrismaClient } from "@prisma/client";
+import {
+  createDeck,
+  customRules,
+  type Game,
+  type PlayerView,
+} from "@cabo/shared";
 const enabled = !!process.env.TEST_DATABASE_URL;
 const base = "http://127.0.0.1:3097";
 let server: ChildProcess;
@@ -105,6 +111,9 @@ describe.skipIf(!enabled)(
           s.on("connect_error", reject);
         });
         clients.push(s);
+        const automatic = (await http("/api/me", i)).data.profile;
+        expect(automatic.username).toMatch(/^player_[0-2][0-9]*$/);
+        expect(automatic.displayName).toBe(`Player ${i}`);
         const profile = await http(
           "/api/profile",
           i,
@@ -292,6 +301,180 @@ describe.skipIf(!enabled)(
       expect(after.activeMatchId).toBe(before.activeMatchId);
       expect(after.game).toEqual(before.game);
     }, 15000);
+    it("provisions unique readable usernames and broadcasts identity changes", async () => {
+      const database = new PrismaClient({
+        datasourceUrl: process.env.TEST_DATABASE_URL,
+      });
+      try {
+        await database.$transaction(async (tx) => {
+          const before = await tx.profile.findUniqueOrThrow({
+            where: { userId: users[0] },
+          });
+          await tx.profile.delete({ where: { userId: users[0] } });
+          await tx.$executeRaw`SELECT cabo_ensure_profile(${users[0]})`;
+          const backfilled = await tx.profile.findUniqueOrThrow({
+            where: { userId: users[0] },
+          });
+          expect(backfilled.username).toMatch(/^[a-z0-9_]{3,24}$/);
+          await tx.profile.update({
+            where: { userId: users[0] },
+            data: { username: before.username },
+          });
+          await tx.$executeRaw`SELECT cabo_ensure_profile(${users[0]})`;
+          expect(
+            (
+              await tx.profile.findUniqueOrThrow({
+                where: { userId: users[0] },
+              })
+            ).username,
+          ).toBe(before.username);
+        });
+      } finally {
+        await database.$disconnect();
+      }
+      const me = (await http("/api/me")).data;
+      expect(me.profile.username).toMatch(/^[a-z0-9_]{3,24}$/);
+      const other = (await http("/api/me", 1)).data;
+      expect(
+        (
+          await http(
+            "/api/profile",
+            1,
+            { username: me.profile.username, displayName: "Duplicate" },
+            "PUT",
+          )
+        ).status,
+      ).toBe(409);
+      const seen = new Promise<any>((resolve) =>
+        clients[1].once("profile:updated", resolve),
+      );
+      const updated = await http(
+        "/api/profile",
+        0,
+        { username: me.profile.username, displayName: "Alex Updated" },
+        "PUT",
+      );
+      expect(updated.status).toBe(200);
+      expect((await seen).username).toBe(me.profile.username);
+      const view = await sync(1);
+      expect(view.game.identities[users[0]].displayName).toBe("Alex Updated");
+      expect(view.members[0].username).toBe(me.profile.username);
+      expect(
+        (await http("/api/users?q=" + me.profile.username, 1)).data.some(
+          (p: any) => p.username === me.profile.username,
+        ),
+      ).toBe(true);
+      expect(other.profile.username).not.toBe(me.profile.username);
+    });
+    it("broadcasts one private-safe swap to both players, persists pending bonus through reconnect and restart", async () => {
+      // Only this local test process can seed a deterministic persisted hand. No production API accepts cards.
+      const db = new PrismaClient({
+        datasourceUrl: process.env.TEST_DATABASE_URL,
+      });
+      try {
+        const current = await sync();
+        const snap = await db.gameSnapshot.findUniqueOrThrow({
+          where: { matchId: current.activeMatchId },
+        });
+        const state = snap.state as unknown as Game;
+        const card = (key: string) =>
+          createDeck(customRules).find((c) => c.key === key)!;
+        state.phase = "drawn";
+        state.turn = 0;
+        state.deadline = Date.now() + 60000;
+        state.drawn = { source: "deck", card: card("9-clubs") };
+        state.players[0].hand[0] = card("J-clubs");
+        state.players[1].hand[0] = card("2-clubs");
+        state.rules.activateSwappedOutAbilities = true;
+        await db.gameSnapshot.update({
+          where: { matchId: current.activeMatchId },
+          data: { state: JSON.parse(JSON.stringify(state)) },
+        });
+        const events: any[][] = [[], [], []];
+        clients.forEach((c, i) => c.on("game:swap", (e) => events[i].push(e)));
+        const activated = await cmd(0, { type: "activate" }, state.version);
+        expect(activated.ok).toBe(true);
+        const actionId = randomUUID();
+        const command = {
+          type: "target",
+          owner: users[1],
+          index: 0,
+          ownIndex: 0,
+        };
+        const swapped = await cmd(0, command, activated.data.version, actionId);
+        expect(swapped.ok).toBe(true);
+        expect(swapped.data.activeAbility).toMatchObject({
+          ability: "peekOpponent",
+          origin: "bonus",
+        });
+        for (let n = 0; n < 40 && events.some((e) => e.length === 0); n++)
+          await new Promise((r) => setTimeout(r, 50));
+        for (const list of events) {
+          expect(list).toHaveLength(1);
+          expect(list[0].event).toMatchObject({
+            actorId: users[0],
+            opponentId: users[1],
+            actorIndex: 0,
+            opponentIndex: 0,
+          });
+          expect(JSON.stringify(list[0])).not.toMatch(
+            /J-clubs|2-clubs|peekOpponent|points|rank/,
+          );
+          expect(list[0].actor.username).toBeTruthy();
+        }
+        const privateView = (await sync(1)).game;
+        expect(privateView.activeAbility).toBeUndefined();
+        expect(privateView.drawn).toBeUndefined();
+        expect(
+          privateView.players.every((p: any) =>
+            p.cards.every((s: any) => !s.card),
+          ),
+        ).toBe(true);
+        expect(
+          (await cmd(0, command, activated.data.version, actionId)).ok,
+        ).toBe(true);
+        await new Promise((r) => setTimeout(r, 200));
+        expect(events.map((e) => e.length)).toEqual([1, 1, 1]);
+        clients[0].disconnect();
+        clients[0].connect();
+        await new Promise<void>((r) => clients[0].once("connect", r));
+        expect((await sync()).game.activeAbility).toEqual(
+          swapped.data.activeAbility,
+        );
+        clients.forEach((c) => c.disconnect());
+        const exited = new Promise((r) => server.once("exit", r));
+        server.kill("SIGTERM");
+        await exited;
+        await startBackend();
+        for (const c of clients) {
+          c.connect();
+          await new Promise<void>((r, j) => {
+            c.once("connect", r);
+            c.once("connect_error", j);
+          });
+        }
+        const recovered = (await sync()).game;
+        expect(recovered.swapHistory).toEqual(swapped.data.swapHistory);
+        expect(recovered.activeAbility).toEqual(swapped.data.activeAbility);
+        const peek = await cmd(
+          0,
+          { type: "target", owner: users[2], index: 0 },
+          recovered.version,
+        );
+        expect(peek.ok).toBe(true);
+        expect((await sync(1)).game.reveal).toBeUndefined();
+        const finished = await cmd(
+          0,
+          { type: "finishAbility" },
+          peek.data.version,
+        );
+        expect(finished.ok).toBe(true);
+        expect(finished.data.turn).toBe(users[1]);
+      } finally {
+        clients.forEach((c) => c.removeAllListeners("game:swap"));
+        await db.$disconnect();
+      }
+    }, 20000);
     it("blocking removes friendship and prevents new requests", async () => {
       expect((await http(`/api/friends/${users[1]}/block`, 0, {})).status).toBe(
         200,

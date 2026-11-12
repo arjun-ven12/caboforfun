@@ -1,7 +1,15 @@
+import { identities } from "./identity.js";
+import type { PublicIdentity } from "@cabo/shared";
 import { db } from "./db.js";
 export type NotifyEmit = (
   userId: string,
-  notification: { id: string; kind: string; body: string; roomId?: string },
+  notification: {
+    id: string;
+    kind: string;
+    body: string;
+    roomId?: string;
+    actor?: PublicIdentity;
+  },
 ) => void;
 let emit: NotifyEmit = () => {};
 export function setNotificationEmitter(fn: NotifyEmit) {
@@ -12,11 +20,14 @@ export async function notify(
   kind: string,
   body: string,
   roomId?: string,
+  actorId?: string,
 ) {
+  const actor = actorId ? (await identities([actorId]))[actorId] : undefined;
+  if (actor) body = `${actor.displayName}: ${body}`;
   const n = await db.notification.create({
-    data: { userId, kind, body, roomId },
+    data: { userId, kind, body, roomId, actorId },
   });
-  emit(userId, { id: n.id, kind, body, roomId });
+  emit(userId, { id: n.id, kind, body, roomId, actor });
   const tokens = await db.pushToken.findMany({ where: { userId } });
   if (!tokens.length) return;
   const response = await fetch("https://exp.host/--/api/v2/push/send", {

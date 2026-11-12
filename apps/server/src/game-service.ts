@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import {
   envelopeSchema,
+  rulesSchema,
   matchWinners,
   expire,
   playerView,
@@ -10,7 +11,9 @@ import {
   type Game,
   type Rules,
   type Envelope,
+  type AuthorizedGameView,
 } from "@cabo/shared";
+import { identities } from "./identity.js";
 import { db, json } from "./db.js";
 let isOnline: (userId: string) => boolean = () => false;
 export function setOnlineLookup(fn: (userId: string) => boolean) {
@@ -53,6 +56,21 @@ export async function member(
   check(m, "NOT_MEMBER", 403);
   return m;
 }
+async function authorizedView(
+  tx: Prisma.TransactionClient,
+  g: Game,
+  userId: string,
+  matchId: string,
+): Promise<AuthorizedGameView> {
+  return {
+    ...playerView(g, userId),
+    matchId,
+    identities: await identities(
+      g.players.map((p) => p.id),
+      tx,
+    ),
+  };
+}
 export async function roomView(roomId: string, userId: string) {
   await member(db, roomId, userId);
   const room = await db.room.findUniqueOrThrow({
@@ -71,11 +89,22 @@ export async function roomView(roomId: string, userId: string) {
     : null;
   return {
     ...room,
+    rules: rulesSchema.parse(room.rules),
     members: room.members.map(({ user, ...m }) => ({
       ...m,
       name: user.profile?.displayName || user.name,
+      displayName: user.profile?.displayName || user.name,
+      username: user.profile?.username ?? null,
     })),
-    game: snap ? playerView(snap.state as unknown as Game, userId) : null,
+    serverTime: Date.now(),
+    game: snap
+      ? await authorizedView(
+          db,
+          snap.state as unknown as Game,
+          userId,
+          snap.matchId,
+        )
+      : null,
   };
 }
 async function saveState(
@@ -130,7 +159,11 @@ export async function command(userId: string, input: Envelope) {
     });
     if (old) {
       check(old.matchId === room.activeMatchId, "ACTION_ID_REUSED");
-      return playerView(g, userId);
+      return {
+        view: await authorizedView(tx, g, userId, room.activeMatchId),
+        events: [],
+        matchId: room.activeMatchId,
+      };
     }
     check(g.version === e.version, "STALE_VERSION", 409);
     const next = transition(g, userId, e.command, randomInt, Date.now());
@@ -144,7 +177,13 @@ export async function command(userId: string, input: Envelope) {
         type: e.command.type,
       },
     });
-    return playerView(next, userId);
+    return {
+      view: await authorizedView(tx, next, userId, room.activeMatchId),
+      events: (next.swapHistory ?? []).filter(
+        (e) => e.version === next.version,
+      ),
+      matchId: room.activeMatchId,
+    };
   });
 }
 export async function startMatch(
@@ -262,6 +301,8 @@ export async function tickRoom(roomId: string) {
       if (next.drawn) next.discard.push(next.drawn.card);
       delete next.drawn;
       delete next.reveal;
+      delete next.activeAbility;
+      next.bonusQueue = [];
       delete next.publicReveal;
       await tx.gameSnapshot.update({
         where: { matchId: room.activeMatchId },

@@ -9,7 +9,9 @@ const checks = [],
   clients = [],
   cookies = [],
   users = [],
-  observed = new Set();
+  observed = new Set(),
+  bonusPowers = new Set(),
+  swapEvents = [[], []];
 let roomId,
   turns = 0,
   failedMatch = false,
@@ -202,7 +204,25 @@ try {
   );
   await http(`/api/invites/${challenge.data.id}/respond`, 1, {});
   pass("Friend challenge, HTTPS invitation and token-authorized lobby join");
+  for (let i = 0; i < 2; i++)
+    clients[i].on("game:swap", (n) => {
+      assert(
+        !JSON.stringify(n.event).match(/rank|points|ability|cardId/),
+        "Public swap exposed card information",
+      );
+      assert(
+        n.actor.username && n.opponent.username,
+        "Swap event omitted usernames",
+      );
+      if (!swapEvents[i].some((e) => e.id === n.event.id))
+        swapEvents[i].push(n.event);
+    });
   const initial = await sync();
+  assert(
+    initial.members.every((m) => m.username),
+    "Lobby identity missing",
+  );
+  pass("Canonical usernames on lobby and game payloads");
   assert(
     initial.rules.name === "My Custom Cabo" &&
       initial.rules.cards.reduce((n, c) => n + c.copies, 0) === 54,
@@ -250,7 +270,12 @@ try {
     turns < 180 && !needed.every((x) => observed.has(x));
     turns++
   ) {
-    const current = (await sync()).game;
+    let current = (await sync()).game;
+    if (
+      current.phase === "ability" &&
+      current.activeAbility?.origin === "bonus"
+    )
+      throw new Error("Previous bonus did not finish");
     const who = users.indexOf(current.turn),
       other = 1 - who;
     let g = await command(who, { type: "draw", source: "deck" });
@@ -348,9 +373,54 @@ try {
         known[who].set(index, card);
       }
     }
+    // Bonus actions stay private and must finish before another draw or Cabo call.
+    for (let chain = 0; chain < 8; chain++) {
+      const pending = (await sync(who)).game;
+      if (
+        pending.turn !== users[who] ||
+        pending.activeAbility?.origin !== "bonus"
+      )
+        break;
+      const ability = pending.activeAbility.ability;
+      bonusPowers.add(ability);
+      assert(
+        !(await sync(other)).game.activeAbility,
+        "Opponent received private bonus ability",
+      );
+      if (ability === "blindSwap") {
+        await command(who, {
+          type: "target",
+          owner: users[other],
+          index: 0,
+          ownIndex: 0,
+        });
+        known[who].delete(0);
+        known[other].delete(0);
+      } else {
+        const owner = ability === "peekOwn" ? who : other;
+        const viewed = await command(who, {
+          type: "target",
+          owner: users[owner],
+          index: 0,
+        });
+        assert(viewed.reveal?.card, "Bonus reveal failed");
+        await sync(other);
+        if (viewed.phase === "lookSwap")
+          await command(who, { type: "resolveSwap" });
+        else await command(who, { type: "finishAbility" });
+      }
+    }
     await sync(other);
     progress();
   }
+  if (swapEvents[0].length && swapEvents[1].length)
+    pass(
+      "Both authenticated sockets received private-safe swap events with card positions",
+    );
+  if (bonusPowers.size)
+    pass(
+      "Live outgoing-card bonus actions completed privately before turn advance",
+    );
   for (const name of needed)
     checks.push({
       name: `Live custom ability ${name}`,
@@ -475,6 +545,8 @@ const report = {
       : "passed",
   turns,
   powers: [...observed],
+  bonusPowers: [...bonusPowers],
+  swapEventsReceived: swapEvents.map((e) => e.length),
   checks,
 };
 if (process.env.SMOKE_REPORT_PATH)

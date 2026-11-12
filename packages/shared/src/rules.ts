@@ -32,6 +32,9 @@ export const rulesSchema = z
     failedMatch: z.enum(["discard", "drawPenalty"]),
     abilities: z.boolean(),
     optionalSwap: z.boolean(),
+    activateSwappedOutAbilities: z.boolean().default(false),
+    chainSwapBonuses: z.boolean().default(false),
+    maxBonusActions: z.number().int().min(1).max(8).default(1),
     peekOpponentCanSwap: z.boolean().default(false),
     caboTiming: z.enum(["start", "afterDeckDraw"]).default("start"),
     caboPenalty: z.number().int().min(0).max(100),
@@ -45,6 +48,11 @@ export const rulesSchema = z
     threshold: z.number().int().min(1).max(1000),
   })
   .superRefine((r, ctx) => {
+    if (r.chainSwapBonuses && !r.activateSwappedOutAbilities)
+      ctx.addIssue({
+        code: "custom",
+        message: "Bonus chaining requires swapped-out abilities",
+      });
     if (r.minPlayers > r.maxPlayers)
       ctx.addIssue({
         code: "custom",
@@ -130,6 +138,9 @@ export const customRules: Rules = {
   failedMatch: "discard",
   abilities: true,
   optionalSwap: true,
+  activateSwappedOutAbilities: true,
+  chainSwapBonuses: false,
+  maxBonusActions: 1,
   peekOpponentCanSwap: false,
   caboTiming: "start",
   caboPenalty: 5,
@@ -145,6 +156,7 @@ export const customRules: Rules = {
 export const standardRules: Rules = {
   ...structuredClone(customRules),
   name: "Classic Standard Deck",
+  activateSwappedOutAbilities: false,
   cards: customRules.cards
     .filter((c) => c.rank !== "★")
     .map((c) => ({
@@ -163,6 +175,7 @@ export const standardRules: Rules = {
 export const classicRules: Rules = {
   ...structuredClone(customRules),
   name: "Classic Cabo (2019)",
+  activateSwappedOutAbilities: false,
   variant: "official",
   maxPlayers: 4,
   caboPenalty: 10,

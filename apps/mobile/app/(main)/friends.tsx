@@ -82,7 +82,8 @@ export default function Friends() {
         .map((e: any) => (
           <Panel key={e.id}>
             <Txt>
-              {profile(e.fromId)?.displayName || "Player"} wants to be friends.
+              {profile(e.fromId)?.displayName || "Player"} @
+              {profile(e.fromId)?.username} wants to be friends.
             </Txt>
             <Row>
               <Button
@@ -176,7 +177,8 @@ export default function Friends() {
         .map((e: any) => (
           <Panel key={e.id}>
             <Txt>
-              Request sent to {profile(e.toId)?.displayName || "player"}
+              Request sent to {profile(e.toId)?.displayName || "player"} @
+              {profile(e.toId)?.username}
             </Txt>
             <Button
               secondary
