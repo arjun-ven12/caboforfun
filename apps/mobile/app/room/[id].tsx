@@ -176,6 +176,7 @@ export default function Room() {
       <ErrorText error={error} />
       {r.game ? (
         <Table
+          key={r.game.matchId}
           game={r.game}
           clockOffset={clockOffset}
           userId={session.user.id}

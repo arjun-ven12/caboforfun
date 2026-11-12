@@ -35,3 +35,11 @@ External and native checks remain unverified: Railway/Docker deployment, Neon co
 The workspace volume was almost full. Local dependencies were installed in temporary storage with an ignored node_modules symlink; a separate clean installation was also verified. Source and configuration contain no runtime dependency on those temporary paths. Ensure sufficient disk space for a native dependency installation and platform build tools on your development machine.
 
 See [release status](RELEASE_STATUS.md) for remaining product features and operational risks.
+
+## 1.1 regression verification — 2026-11-12
+
+All **92 tests across four files** pass, including **11 PostgreSQL/HTTP/Socket.IO integration cases**, also executed against the compiled server. All workspaces typecheck, production backend builds, Android Metro/Hermes export and all 14 release guards pass. GitHub clean-install CI additionally passed dependency install, four migrations against a fresh database, tests, Docker build and Android export. A React Native ref declaration exposed by the clean install was corrected using public `ViewInstance` types.
+
+Production Neon migration passed after a private full backup. Three accounts remained; missing profiles were backfilled (one profile before, three after). The deployed API health check and two-client HTTPS/WSS full match passed with every custom power, matching, Cabo scoring, reconnect and rematch. A separate live run seeded its hand only through legitimate random draws, then verified both blind-swap and Black King outgoing bonus actions, private target/reveal, pending-bonus reconnect and next-turn sequencing. See `production-live-multiplayer.json` and `production-live-swap-bonus.json`. No administrative card-injection endpoint exists.
+
+These are backend/build results. Native animation, haptic/accessibility behavior and two physical Android devices remain unverified; use the expanded [acceptance matrix](ANDROID_ACCEPTANCE.md).

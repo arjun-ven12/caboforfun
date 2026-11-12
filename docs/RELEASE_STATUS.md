@@ -27,7 +27,7 @@ Production deployment and Android distribution have progressed beyond this initi
 ## Remaining product and engineering work
 
 - A production release needs device QA on iOS and Android, accessibility/reduced-motion review, E2E execution, load/soak testing, observability dashboards, backup/restore rehearsal and abuse review.
-- Card movement is reflected in authoritative state, but animated physical card exchanges, gesture-driven dragging, sound, native rule-editor bottom sheets, celebration animation and bespoke loading/empty-state illustrations are not implemented. UI is tap/confirm based.
+- Card swaps now have position-only real-time events, a measured card-back exchange overlay, highlights, banners and recovered history. Physical-device visual/frame-rate review remains required. Gesture-driven dragging, sound, native rule-editor bottom sheets, celebration animation and bespoke loading/empty-state illustrations remain unimplemented. UI uses tap/confirm.
 - Native preferences support themes, reduced motion, haptics and invitation pushes. There is no sound engine or sound preference.
 - Achievements are not implemented. Statistics are derived from stored completed matches/rounds rather than a materialized aggregate table.
 - Presence is available in the friends response and refreshed with server queries; there is no dedicated instantaneous presence fan-out. Challenges and friend requests use real-time inbox notifications. Accepted joins, lobby readiness, rematch requests and background turn reminders are also wired to the inbox/push integration; device delivery remains unverified.
@@ -42,3 +42,5 @@ Production deployment and Android distribution have progressed beyond this initi
 - Account deletion removes identity, sessions, social edges, invitations, presets and device tokens; match records retain random user IDs for historical integrity. A formal retention/export policy remains a product/legal decision.
 
 Do not interpret passing local tests as store approval, licensed affiliation, successful external delivery or production certification.
+
+Release 1.1 adds bounded outgoing-card bonus actions, unique profile provisioning/backfill, canonical identities and swap feedback. All 92 automated tests and 14 release guards pass; see [the complete change record](SWAP_RELEASE_1.1.md). Physical-device acceptance remains unexecuted.

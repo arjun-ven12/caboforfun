@@ -92,7 +92,7 @@ Release acceptance requires every applicable case to pass on both phones, the re
 
 ## Release 1.1: swaps, bonus actions and usernames
 
-These cases are **Not run on physical devices**. Use APK 1.1.0/versionCode 2 on both phones. Repeat in light/dark themes, Android reduced-motion mode and with app haptics disabled. Backend fixture tests do not establish visual correctness.
+These cases are **Not run on physical devices**. Use APK 1.1.0/versionCode 3 on both phones. Repeat in light/dark themes, Android reduced-motion mode and with app haptics disabled. Backend fixture tests do not establish visual correctness.
 
 | ID | Actions | Expected result |
 | --- | --- | --- |

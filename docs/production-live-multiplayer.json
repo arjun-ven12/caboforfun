@@ -1,18 +1,23 @@
 {
-  "checkedAt": "2026-11-11T07:00:00.546Z",
+  "checkedAt": "2026-11-12T02:04:45.561Z",
   "apiUrl": "https://cabo-api-production.up.railway.app",
   "transport": "Two programmatic Socket.IO clients over HTTPS/WSS; not Android devices",
   "status": "passed",
-  "turns": 25,
+  "turns": 40,
   "powers": [
     "Q",
     "8",
-    "J",
-    "10",
     "7",
-    "9",
+    "J",
     "blackKingKeep",
+    "10",
+    "9",
     "blackKingSwap"
+  ],
+  "bonusPowers": [],
+  "swapEventsReceived": [
+    4,
+    4
   ],
   "checks": [
     {
@@ -28,11 +33,19 @@
       "status": "passed"
     },
     {
+      "name": "Canonical usernames on lobby and game payloads",
+      "status": "passed"
+    },
+    {
       "name": "Default 54-card rules, synchronized settings and immutable match snapshot",
       "status": "passed"
     },
     {
       "name": "Exactly two private initial cards and ready-gated memorization",
+      "status": "passed"
+    },
+    {
+      "name": "Both authenticated sockets received private-safe swap events with card positions",
       "status": "passed"
     },
     {

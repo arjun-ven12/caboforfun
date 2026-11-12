@@ -55,6 +55,9 @@ export function useSwapFeedback(
   clockOffset: number,
 ) {
   const [event, setEvent] = useState<SwapEvent>();
+  const currentRound = useRef(g.round);
+  currentRound.current = g.round;
+  useEffect(() => setEvent(undefined), [g.round]);
   const prefs = usePreferences();
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const alive = useRef(true);
@@ -70,7 +73,8 @@ export function useSwapFeedback(
     let live = true;
     void (async () => {
       const saved =
-        seen.get(key) ?? Number((await SecureStore.getItemAsync(key)) || 0);
+        seen.get(key) ??
+        Number((await SecureStore.getItemAsync(key).catch(() => null)) || 0);
       if (!live) return;
       let high = Math.max(saved, seen.get(key) || 0);
       for (const e of g.swapHistory) {
@@ -81,9 +85,10 @@ export function useSwapFeedback(
           timersRef.current.push(
             setTimeout(
               () => {
-                if (!alive.current) return;
+                if (!alive.current || currentRound.current !== e.round) return;
                 setEvent(e);
-                if (prefs.haptics) void Haptics.selectionAsync();
+                if (prefs.haptics)
+                  void Haptics.selectionAsync().catch(() => {});
               },
               Math.max(0, e.animateAt - Date.now() - clockOffset),
             ),
@@ -91,7 +96,7 @@ export function useSwapFeedback(
         }
       }
       seen.set(key, high);
-      await SecureStore.setItemAsync(key, String(high));
+      await SecureStore.setItemAsync(key, String(high)).catch(() => {});
     })();
     return () => {
       live = false;
@@ -279,18 +284,23 @@ export function SwapBanner({
 }) {
   if (!event) return null;
   return (
-    <Panel>
-      <View accessibilityLiveRegion="polite">
-        <Txt size={14}>{swapMessage(event, viewer, people)}</Txt>
-        {[event.actorId, event.opponentId].map(
-          (id) =>
-            people[id]?.username && (
-              <Txt key={id} muted size={11}>
-                @{people[id].username}
-              </Txt>
-            ),
-        )}
-      </View>
-    </Panel>
+    <View
+      pointerEvents="none"
+      style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 2000 }}
+    >
+      <Panel>
+        <View accessibilityLiveRegion="polite">
+          <Txt size={14}>{swapMessage(event, viewer, people)}</Txt>
+          {[event.actorId, event.opponentId].map(
+            (id) =>
+              people[id]?.username && (
+                <Txt key={id} muted size={11}>
+                  @{people[id].username}
+                </Txt>
+              ),
+          )}
+        </View>
+      </Panel>
+    </View>
   );
 }

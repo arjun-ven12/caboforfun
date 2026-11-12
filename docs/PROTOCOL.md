@@ -46,7 +46,7 @@ Command is a discriminated union from `packages/shared/src/engine.ts`:
 | activate      | —                       | Deck draw with an enabled ability                                     |
 | target        | owner, index, ownIndex? | Own peek, opponent peek, blind swap, Black King inspect               |
 | resolveSwap   | ownIndex?               | Black King: omission means Keep as is, otherwise swap                 |
-| finishAbility | —                       | Clear private peek and end turn                                       |
+| finishAbility | —                       | Clear private peek; resolve queued bonus before advancing                                       |
 | cabo          | —                       | Configured call phase; initiate one final turn per opponent           |
 | nextRound     | —                       | Seat-zero match organizer after round results                         |
 
@@ -55,11 +55,17 @@ Acknowledgements are `{ok:true,data}` or `{ok:false,error}`. Never infer authori
 Server events:
 
 - `room:changed({roomId})`: notification to authenticated members to refresh lobby data.
-- `game:state(PlayerView & {roomId})`: individually projected for each account. Ignore versions older than your current state.
-- `notification({id,kind,body,roomId?})`: account-specific inbox update.
+- `game:state(AuthorizedGameView & {roomId,serverTime})`: individually projected for each account. Ignore versions older than your current state.
+- `game:swap({roomId,matchId,event,actor,opponent,serverTime})`: public position-only exchange. `event` contains `id, sequence, version, round, actorId, opponentId, actorIndex, opponentIndex, occurredAt, animateAt`; indices are zero-based. Only newly committed swaps emit this event. Replayed commands return state without another event.
+- `profile:updated({userId,displayName,username})`: canonical public identity update for related viewers. Invalidate profile-dependent queries.
+- `notification({id,kind,body,roomId?,actor?})`: account-specific inbox update.
 
 There is deliberately one validated game-command event, rather than separate untyped events for each card rank. Public and private data are distinguished by the projection. No socket broadcast contains a deck, all hands, an opponent's pending deck draw, or another viewer's private peek. Failed matches are intentionally public. Completed rounds reveal all hands. Typed client/server event interfaces are in `packages/shared/src/protocol.ts`.
 
 Deadlines use server time and are persisted. The 1-second single-instance scheduler advances expired turns; command validation rejects expired input even before that sweep. Memory never auto-readies players. Timeouts discard pending draws and end the turn; a discard-source timeout returns the taken card to the discard pile. Exhaustion preserves the top discard and reshuffles the rest, or ends the round by the selected policy. No recyclable cards ends the round. Empty hands end the round. Negative scores remain signed integers.
 
 The default extended-absence policy forfeits the match after the configured grace period. The alternative pause policy persists `pausedAt`, rejects player commands while paused, and shifts the stored deadline by the actual pause duration after all absent members reconnect. Both behaviors are integration-tested with a pending private draw.
+
+`AuthorizedGameView` adds `matchId` and current database-backed `identities` to the private engine projection. `swapHistory` contains at most 50 public swaps, retained across rounds and reconnects. Each hand slot has a `revision` that changes on replacement/exchange. Only the acting player receives `activeAbility` and `bonusQueue`; these contain typed ability/origin/depth, never outgoing card identities. Bonus actions use the existing `target`, `resolveSwap` and `finishAbility` commands. A bonus has no `drawn` card; clients must read `activeAbility.ability`. The exchange, queue and history commit atomically. Deadlines bound the whole turn including bonuses.
+
+The immutable snapshot settings are `activateSwappedOutAbilities` (custom default true, classic/legacy false), `chainSwapBonuses` (false), and `maxBonusActions` (1, valid 1–8). The count is the total bonuses per turn, excluding the original drawn action. Declined swaps and ordinary hand replacements do not generate bonuses.

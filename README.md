@@ -97,7 +97,7 @@ npm run railway -- up --project 37cac4c3-91ec-4894-aa61-3797ef8c5722 --service 3
 npm run railway -- logs --service cabo-api --environment production --lines 60
 ```
 
-The production database was initialized using the three committed migrations, and Railway successfully built and ran the Docker image. Future deployments apply only pending reviewed migrations. The server saves each transition transactionally and recovers snapshots/deadlines after restart. SIGTERM stops the scheduler, closes sockets and drains the database. Use Neon backups and test restores. Never scale replicas above one before implementing shared socket publication and connection ownership.
+The production database has all four committed migrations applied, and Railway successfully built and ran the Docker image. Future deployments apply only pending reviewed migrations. The server saves each transition transactionally and recovers snapshots/deadlines after restart. SIGTERM stops the scheduler, closes sockets and drains the database. Use Neon backups and test restores. Never scale replicas above one before implementing shared socket publication and connection ownership.
 
 ## Invitations and OS links
 
@@ -143,3 +143,5 @@ Preview produces an APK; production Android produces an AAB. iOS requires Apple 
 - [Architecture](docs/ARCHITECTURE.md), [protocol](docs/PROTOCOL.md), [release status](docs/RELEASE_STATUS.md).
 
 Dependency choices were checked against [Expo SDK 58](https://expo.dev/changelog/sdk-58), its `bundledNativeModules.json`, [Better Auth Expo integration](https://better-auth.com/docs/integrations/expo) and [Express integration](https://better-auth.com/docs/integrations/express). Classic Cabo follows the [2019 published rule sheet](https://cdn.1j1ju.com/medias/81/a9/63-cabo-rulebook.pdf); the [publisher page](https://beziergames.com/pages/cabo) describes the face-down expert variant. This app uses generic numbered cards for that preset, never proprietary character artwork. Standard-deck adaptation values are Ace 1, 2–10 face value, all J/Q/K 10, no Jokers, with 7–8 own peek, 9–10 opponent peek, J–Q blind swap; it is not the official numbered game.
+
+Version 1.1 adds real-time private-safe swap feedback, bounded outgoing-card bonus abilities (Custom default ON), and unique readable usernames for existing and new accounts. See [the behavior, changed-file and verification report](docs/SWAP_RELEASE_1.1.md).

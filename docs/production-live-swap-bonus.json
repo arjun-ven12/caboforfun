@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-11-12T02:06:56.763Z",
+  "status": "passed",
+  "transport": "Two programmatic HTTPS/WSS clients; not Android devices",
+  "originalSwaps": [
+    "blackKing",
+    "blindSwap"
+  ],
+  "turns": 15,
+  "swapEventsReceived": [
+    2,
+    2
+  ],
+  "checks": [
+    "Exact default outgoing ability privately queued from actual server hand",
+    "Blind swap and Black King swap bonus resolution",
+    "Pending bonus and history recovered after reconnect",
+    "No hidden cards or bonus state exposed to opponent",
+    "Default chain bound and turn advance",
+    "Both authenticated sockets received position-only swaps"
+  ]
+}

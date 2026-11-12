@@ -44,6 +44,9 @@ Game/room/history/invitation/notification payloads resolve identities from curre
 | `apps/mobile/app/how-to-play.tsx` | House-rule explanation and bounded chaining. |
 | `apps/mobile/app.config.ts` | Application version 1.1.0. |
 | `apps/mobile/eas.json` | Automatic preview Android version-code increments. |
+| `scripts/verify-swap-bonus-live.mjs` | Separate live default-deck bonus/reconnect/privacy check using legitimate random draws. |
+| `docs/PROTOCOL.md`, `docs/ARCHITECTURE.md` | Document new events, queue, identity projection and compatibility. |
+| `docs/production-live-multiplayer.json`, `docs/production-live-swap-bonus.json`, `docs/production-live-check.json`, `docs/GITHUB_RELEASE.md` | Public live-check evidence and distribution record. |
 | `scripts/live-multiplayer.mjs` | Live private-safe swap delivery, canonical identity and bonus resolution checks. |
 | `docs/ANDROID_ACCEPTANCE.md` | Expanded two-device swap/bonus/identity acceptance matrix. |
 | `docs/SWAP_RELEASE_1.1.md` | This implementation, verification and changed-file record. |
