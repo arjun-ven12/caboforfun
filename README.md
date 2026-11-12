@@ -97,7 +97,7 @@ npm run railway -- up --project 37cac4c3-91ec-4894-aa61-3797ef8c5722 --service 3
 npm run railway -- logs --service cabo-api --environment production --lines 60
 ```
 
-The production database has all four committed migrations applied, and Railway successfully built and ran the Docker image. Future deployments apply only pending reviewed migrations. The server saves each transition transactionally and recovers snapshots/deadlines after restart. SIGTERM stops the scheduler, closes sockets and drains the database. Use Neon backups and test restores. Never scale replicas above one before implementing shared socket publication and connection ownership.
+The production database has all five committed migrations applied, and Railway successfully built and ran the Docker image. Future deployments apply only pending reviewed migrations. The server saves each transition transactionally and recovers snapshots/deadlines after restart. SIGTERM stops the scheduler, closes sockets and drains the database. Use Neon backups and test restores. Never scale replicas above one before implementing shared socket publication and connection ownership.
 
 ## Invitations and OS links
 

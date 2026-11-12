@@ -75,6 +75,8 @@ export function personality(c: BotConfig): BotConfig {
       p.cabo = Math.min(1, p.cabo + 0.15);
       break;
     case "analytical":
+      p.risk *= 0.8;
+      p.aggression *= 0.75;
       p.inference = Math.min(1, p.inference + 0.2);
       p.special = Math.min(1, p.special + 0.2);
       break;

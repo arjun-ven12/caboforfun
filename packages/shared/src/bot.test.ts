@@ -251,6 +251,9 @@ describe("restricted rule-aware bot", () => {
     expect(score({ aggression: 0 })).not.toBe(score({ aggression: 1 }));
     expect(score({ special: 0 })).not.toBe(score({ special: 1 }));
     expect(score({ awareness: 0 })).not.toBe(score({ awareness: 1 }));
+    expect(score({ personality: "analytical" })).not.toBe(
+      score({ personality: "balanced" }),
+    );
     expect(score({ personality: "conservative" })).not.toBe(
       score({ personality: "aggressive" }),
     );
