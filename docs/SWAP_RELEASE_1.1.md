@@ -20,38 +20,38 @@ Game/room/history/invitation/notification payloads resolve identities from curre
 
 ## Changed files
 
-| File | Purpose |
-| --- | --- |
-| `packages/shared/src/rules.ts` | Validated activation/chaining/cap settings and preset defaults. |
-| `packages/shared/src/engine.ts` | Atomic exchange history, slot revisions, private bounded bonus queue and lifecycle cleanup. |
-| `packages/shared/src/protocol.ts` | Canonical public identities, authorized game views and typed swap/profile events. |
-| `packages/shared/src/swap-bonus.test.ts` | Bonus powers, no-op/decline cases, privacy, restart serialization, chaining bounds, timeouts and final turns. |
-| `apps/server/prisma/schema.prisma` | Optional notification actor relation, separate from recipient. |
-| `apps/server/prisma/migrations/202611120001_usernames/migration.sql` | Safe username backfill/provisioning, uniqueness/format constraints and actor migration. |
-| `apps/server/src/identity.ts` | Database-backed identity projection and update publisher. |
-| `apps/server/src/game-service.ts` | Authorized identity-enriched views; fresh committed swap events versus idempotent replay; recovery cleanup and legacy rule normalization. |
-| `apps/server/src/index.ts` | Real-time public swaps and scoped profile update delivery. |
-| `apps/server/src/api.ts` | Validated profile edits, identity-enriched invites/history/inbox and compatible preset projection. |
-| `apps/server/src/notifications.ts` | Persisted actor attribution and current public actor identity. |
-| `apps/server/test/integration.test.ts` | Three-client swap delivery/secrecy/replay, pending bonus reconnect/restart, username provisioning/backfill/edit/collision/search. |
-| `apps/mobile/src/swap-feedback.tsx` | Measured card-back exchange overlay, highlights, banners, persisted deduplication, identity component and haptics/reduced motion. |
-| `apps/mobile/src/table.tsx` | Bonus selection flow, canonical identities, results and recoverable swap history. |
-| `apps/mobile/app/room/[id].tsx` | State/event synchronization, server clock estimate, lobby and rematch identities. |
-| `apps/mobile/app/(main)/friends.tsx` | Secondary usernames on requests as well as existing friend/search rows. |
-| `apps/mobile/app/_layout.tsx` | Refresh identity-dependent queries on profile events; listener cleanup. |
-| `apps/mobile/app/activity.tsx` | Usernames on invitation/notification actors and named match-history scores. |
-| `apps/mobile/app/rules.tsx` | Advanced activation/chaining controls, cap slider and complete summary. |
-| `apps/mobile/app/how-to-play.tsx` | House-rule explanation and bounded chaining. |
-| `apps/mobile/app.config.ts` | Application version 1.1.0. |
-| `apps/mobile/eas.json` | Automatic preview Android version-code increments. |
-| `scripts/verify-swap-bonus-live.mjs` | Separate live default-deck bonus/reconnect/privacy check using legitimate random draws. |
-| `docs/PROTOCOL.md`, `docs/ARCHITECTURE.md` | Document new events, queue, identity projection and compatibility. |
-| `docs/production-live-multiplayer.json`, `docs/production-live-swap-bonus.json`, `docs/production-live-check.json`, `docs/GITHUB_RELEASE.md` | Public live-check evidence and distribution record. |
-| `scripts/live-multiplayer.mjs` | Live private-safe swap delivery, canonical identity and bonus resolution checks. |
-| `docs/ANDROID_ACCEPTANCE.md` | Expanded two-device swap/bonus/identity acceptance matrix. |
-| `docs/SWAP_RELEASE_1.1.md` | This implementation, verification and changed-file record. |
-| `docs/VERIFICATION.md`, `docs/RELEASE_STATUS.md`, `docs/DEPLOYMENT_STATUS.md`, `docs/PRODUCTION_DEPLOYMENT.md`, `README.md` | Updated test/release facts and installation links. |
-| `deploy/production.json`, `deploy/android-preview.json` | Public deployment/build/artifact provenance. |
+| File                                                                                                                                         | Purpose                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/rules.ts`                                                                                                               | Validated activation/chaining/cap settings and preset defaults.                                                                           |
+| `packages/shared/src/engine.ts`                                                                                                              | Atomic exchange history, slot revisions, private bounded bonus queue and lifecycle cleanup.                                               |
+| `packages/shared/src/protocol.ts`                                                                                                            | Canonical public identities, authorized game views and typed swap/profile events.                                                         |
+| `packages/shared/src/swap-bonus.test.ts`                                                                                                     | Bonus powers, no-op/decline cases, privacy, restart serialization, chaining bounds, timeouts and final turns.                             |
+| `apps/server/prisma/schema.prisma`                                                                                                           | Optional notification actor relation, separate from recipient.                                                                            |
+| `apps/server/prisma/migrations/202611120001_usernames/migration.sql`                                                                         | Safe username backfill/provisioning, uniqueness/format constraints and actor migration.                                                   |
+| `apps/server/src/identity.ts`                                                                                                                | Database-backed identity projection and update publisher.                                                                                 |
+| `apps/server/src/game-service.ts`                                                                                                            | Authorized identity-enriched views; fresh committed swap events versus idempotent replay; recovery cleanup and legacy rule normalization. |
+| `apps/server/src/index.ts`                                                                                                                   | Real-time public swaps and scoped profile update delivery.                                                                                |
+| `apps/server/src/api.ts`                                                                                                                     | Validated profile edits, identity-enriched invites/history/inbox and compatible preset projection.                                        |
+| `apps/server/src/notifications.ts`                                                                                                           | Persisted actor attribution and current public actor identity.                                                                            |
+| `apps/server/test/integration.test.ts`                                                                                                       | Three-client swap delivery/secrecy/replay, pending bonus reconnect/restart, username provisioning/backfill/edit/collision/search.         |
+| `apps/mobile/src/swap-feedback.tsx`                                                                                                          | Measured card-back exchange overlay, highlights, banners, persisted deduplication, identity component and haptics/reduced motion.         |
+| `apps/mobile/src/table.tsx`                                                                                                                  | Bonus selection flow, canonical identities, results and recoverable swap history.                                                         |
+| `apps/mobile/app/room/[id].tsx`                                                                                                              | State/event synchronization, server clock estimate, lobby and rematch identities.                                                         |
+| `apps/mobile/app/(main)/friends.tsx`                                                                                                         | Secondary usernames on requests as well as existing friend/search rows.                                                                   |
+| `apps/mobile/app/_layout.tsx`                                                                                                                | Refresh identity-dependent queries on profile events; listener cleanup.                                                                   |
+| `apps/mobile/app/activity.tsx`                                                                                                               | Usernames on invitation/notification actors and named match-history scores.                                                               |
+| `apps/mobile/app/rules.tsx`                                                                                                                  | Advanced activation/chaining controls, cap slider and complete summary.                                                                   |
+| `apps/mobile/app/how-to-play.tsx`                                                                                                            | House-rule explanation and bounded chaining.                                                                                              |
+| `apps/mobile/app.config.ts`                                                                                                                  | Application version 1.1.0.                                                                                                                |
+| `apps/mobile/eas.json`                                                                                                                       | Automatic preview Android version-code increments.                                                                                        |
+| `scripts/verify-swap-bonus-live.mjs`                                                                                                         | Separate live default-deck bonus/reconnect/privacy check using legitimate random draws.                                                   |
+| `docs/PROTOCOL.md`, `docs/ARCHITECTURE.md`                                                                                                   | Document new events, queue, identity projection and compatibility.                                                                        |
+| `docs/production-live-multiplayer.json`, `docs/production-live-swap-bonus.json`, `docs/production-live-check.json`, `docs/GITHUB_RELEASE.md` | Public live-check evidence and distribution record.                                                                                       |
+| `scripts/live-multiplayer.mjs`                                                                                                               | Live private-safe swap delivery, canonical identity and bonus resolution checks.                                                          |
+| `docs/ANDROID_ACCEPTANCE.md`                                                                                                                 | Expanded two-device swap/bonus/identity acceptance matrix.                                                                                |
+| `docs/SWAP_RELEASE_1.1.md`                                                                                                                   | This implementation, verification and changed-file record.                                                                                |
+| `docs/VERIFICATION.md`, `docs/RELEASE_STATUS.md`, `docs/DEPLOYMENT_STATUS.md`, `docs/PRODUCTION_DEPLOYMENT.md`, `README.md`                  | Updated test/release facts and installation links.                                                                                        |
+| `deploy/production.json`, `deploy/android-preview.json`                                                                                      | Public deployment/build/artifact provenance.                                                                                              |
 
 ## Verification
 

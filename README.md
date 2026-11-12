@@ -10,7 +10,7 @@ The client contains working networked flows. The production backend is deployed 
 - Android/iOS simulator or physical device for native runtime verification. SDK 58 uses React Native 0.88 and the New Architecture.
 - Docker is optional for local PostgreSQL. EAS and platform developer accounts are required for signed distribution.
 
-Production is now deployed at https://cabo-api-production.up.railway.app. [Download the signed Android preview APK](https://github.com/arjun-ven12/caboforfun/releases/download/v1.0.0-preview.1/cabo-android-v1.0.0-preview.apk). See [the production runbook](docs/PRODUCTION_DEPLOYMENT.md) for exact Railway/Neon/EAS settings and [current deployment evidence](docs/DEPLOYMENT_STATUS.md) for build/verification status.
+Production is now deployed at https://cabo-api-production.up.railway.app. [Download the signed Android preview APK](https://github.com/arjun-ven12/caboforfun/releases/download/v1.1.0-preview.1/cabo-android-v1.1.0-preview.apk). See [the production runbook](docs/PRODUCTION_DEPLOYMENT.md) for exact Railway/Neon/EAS settings and [current deployment evidence](docs/DEPLOYMENT_STATUS.md) for build/verification status.
 
 ## Local setup
 

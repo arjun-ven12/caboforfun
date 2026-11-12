@@ -46,7 +46,7 @@ Command is a discriminated union from `packages/shared/src/engine.ts`:
 | activate      | —                       | Deck draw with an enabled ability                                     |
 | target        | owner, index, ownIndex? | Own peek, opponent peek, blind swap, Black King inspect               |
 | resolveSwap   | ownIndex?               | Black King: omission means Keep as is, otherwise swap                 |
-| finishAbility | —                       | Clear private peek; resolve queued bonus before advancing                                       |
+| finishAbility | —                       | Clear private peek; resolve queued bonus before advancing             |
 | cabo          | —                       | Configured call phase; initiate one final turn per opponent           |
 | nextRound     | —                       | Seat-zero match organizer after round results                         |
 
