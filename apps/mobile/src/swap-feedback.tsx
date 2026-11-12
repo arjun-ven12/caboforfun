@@ -5,7 +5,7 @@ import React, {
   createContext,
   useContext,
 } from "react";
-import { View, AccessibilityInfo } from "react-native";
+import { View, AccessibilityInfo, type ViewInstance } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -104,7 +104,7 @@ export function useSwapFeedback(
   }, [event?.id]);
   return event;
 }
-type NativeView = React.ElementRef<typeof View>;
+type NativeView = ViewInstance;
 type Bounds = { x: number; y: number; width: number; height: number };
 const Slots = createContext<React.MutableRefObject<
   Map<string, NativeView>
