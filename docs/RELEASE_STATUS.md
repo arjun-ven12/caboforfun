@@ -17,7 +17,7 @@ Production deployment and Android distribution have progressed beyond this initi
 
 ## Implemented, requiring service configuration or device validation
 
-- Better Auth email/password sessions, email verification, reset password and deletion. Email verification is currently disabled in production as requested; email/password accounts work without SMTP. Set REQUIRE_EMAIL_VERIFICATION=true and configure SMTP to require confirmation later. Google/Apple need provider credentials and registered callbacks. No production accounts were configured.
+- Better Auth email/password sessions, email verification, reset password and deletion. Email verification is currently disabled in production as requested; email/password accounts work without SMTP. Set REQUIRE_EMAIL_VERIFICATION=true and configure SMTP to require confirmation later. Google/Apple need provider credentials and registered callbacks. OAuth provider accounts remain unconfigured.
 - Expo SecureStore persistence, OAuth browser return, deep-link intent retention through sign-in, background socket lifecycle, notifications, haptics, Reanimated interactions and SVG cards.
 - Universal/App Link files and invitation web fallback. Domain ownership, TLS, iOS Team ID, Android signing certificate fingerprints and store URLs are external setup. Actual OS handoff and installation flows are unverified. The installation fallback is an explicit room code; no automatic cross-install attribution service is integrated.
 - Expo push HTTP delivery and opt-in device registration. APNs/FCM, EAS project and actual background delivery are unverified. Push receipt polling, invalid-token cleanup and durable push retries are not implemented.

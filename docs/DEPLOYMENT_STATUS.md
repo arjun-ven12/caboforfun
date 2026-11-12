@@ -32,3 +32,5 @@ Current preview: **1.1.0**, Android versionCode **3**. [Download APK](https://gi
 The GitHub release is the primary download. The EAS artifact remains the original build record; its retention is controlled by EAS. APKs and private database backups are not checked into Git.
 
 SMTP, Google/Apple OAuth, FCM/APNs, background push, Play publishing and iOS distribution retain their prior external setup requirements. No sender/provider setup is faked. See [the production runbook](PRODUCTION_DEPLOYMENT.md), [complete 1.1 change report](SWAP_RELEASE_1.1.md) and [two-device acceptance plan](ANDROID_ACCEPTANCE.md).
+
+Final download-link deployment: `110e7ced-e02c-4cc5-b742-6f55f35a6eff` succeeded. Post-release checks confirmed health, authenticated sockets, session revocation and the updated invitation download link. GitHub serves the APK with HTTP 200 and its server-reported SHA-256 matches the independently verified EAS artifact. Both main and release-tag GitHub CI passed. The two temporary QA accounts and their rooms/matches were removed afterward; the three original accounts and their three profiles remain.

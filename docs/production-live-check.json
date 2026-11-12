@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-12T02:24:37.732Z",
+  "checkedAt": "2026-11-12T02:31:24.486Z",
   "apiUrl": "https://cabo-api-production.up.railway.app",
   "status": "passed",
   "checks": [
@@ -57,6 +57,14 @@
     },
     {
       "name": "Open socket rejects revoked session",
+      "status": "passed"
+    },
+    {
+      "name": "Invitation landing uses verified 1.1.0 GitHub APK",
+      "status": "passed"
+    },
+    {
+      "name": "GitHub download HTTP 200 and server asset SHA256 matches verified APK",
       "status": "passed"
     }
   ]
