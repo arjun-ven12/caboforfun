@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-12T02:31:24.486Z",
+  "checkedAt": "2026-11-12T07:11:08.052Z",
   "apiUrl": "https://cabo-api-production.up.railway.app",
   "status": "passed",
   "checks": [
@@ -60,11 +60,11 @@
       "status": "passed"
     },
     {
-      "name": "Invitation landing uses verified 1.1.0 GitHub APK",
+      "name": "Invitation landing links verified Android 1.2 GitHub APK",
       "status": "passed"
     },
     {
-      "name": "GitHub download HTTP 200 and server asset SHA256 matches verified APK",
+      "name": "GitHub APK HTTP 200; size and digest match independently verified EAS APK",
       "status": "passed"
     }
   ]

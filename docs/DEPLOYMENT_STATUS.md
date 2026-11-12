@@ -27,3 +27,12 @@ Current signed preview: **1.2.0 / versionCode 5**. [Download APK](https://github
 [AI implementation, per-file report and measured results](BOTS.md) · [benchmark JSON](BOT_BENCHMARK.json) · [live bot evidence](production-bot-check.json) · [two-device acceptance](ANDROID_ACCEPTANCE.md). These backend clients are not Android devices.
 
 No new LLM or infrastructure credentials are required. OAuth, SMTP recovery, FCM/APNs, Play publishing and iOS distribution retain their prior external setup requirements. A single backend instance remains the supported topology; production load/soak testing and native review are outstanding. GitHub is the primary APK download; Expo retains original build provenance under its artifact retention policy.
+
+## Final production closeout
+
+- Server source `523d76f` deployed successfully as Railway deployment `6e71aac5-fc00-43c7-87af-2eb950ea180a`.
+- [GitHub CI for final server source](https://github.com/arjun-ven12/caboforfun/actions/runs/43172565708) completed successfully.
+- At 2026-11-12 07:11 UTC, live HTTPS/PostgreSQL health, authenticated REST and WSS, unauthenticated rejection, room synchronization, logout/session revocation, Android association and current invitation APK target passed. See [sanitized live results](production-live-check.json).
+- Removed the two temporary QA accounts, their five rooms and eight bot seats after verification. All three original accounts and profiles remain. Cleanup was constrained to the exact QA identities and rejected rooms containing other human participants.
+
+The APK contains mobile source `1bb2460`. Later commits change server-side AI memory/personality behavior or documentation; they do not require another native binary. The published release remains immutable.
