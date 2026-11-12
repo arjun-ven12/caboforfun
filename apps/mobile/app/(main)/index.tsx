@@ -51,6 +51,7 @@ export default function Home() {
         eyebrow={`Hello, ${session?.user.name?.split(" ")[0] || "friend"}`}
         title={"Make time\nfor a little play."}
       />
+      <Button title="Play vs AI" onPress={() => router.push("/bots")} />
       <Panel>
         <Emblem />
         <Txt size={24} style={{ letterSpacing: -0.6 }}>

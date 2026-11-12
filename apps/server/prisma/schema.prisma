@@ -24,6 +24,7 @@ model User {
  presets RulePreset[]
  outgoing SocialEdge[] @relation("SocialFrom")
  incoming SocialEdge[] @relation("SocialTo")
+ botPresets BotPreset[]
  hostedRooms Room[]
  sentInvites Invitation[] @relation("InviteFrom")
  receivedInvites Invitation[] @relation("InviteTo")
@@ -99,6 +100,9 @@ model Room {
  invitations Invitation[]
  matches Match[]
  activeMatchId String?
+ bots RoomBot[]
+ botOptions Json @default("{}")
+ soloPausedAt DateTime?
 }
 model RoomMember {
  id String @id @default(cuid())
@@ -130,6 +134,7 @@ model Invitation {
  @@index([toId,expiresAt])
 }
 model Match {
+ kind String @default("human")
  id String @id @default(cuid())
  roomId String
  room Room @relation(fields:[roomId],references:[id])
@@ -142,6 +147,7 @@ model Match {
  participants MatchParticipant[]
  rounds Round[]
  @@index([roomId,createdAt])
+ @@index([kind,createdAt])
 }
 model MatchParticipant {
  id String @id @default(cuid())
@@ -150,6 +156,8 @@ model MatchParticipant {
  userId String
  total Int @default(0)
  winner Boolean @default(false)
+ identity Json?
+ botConfig Json?
  @@unique([matchId,userId])
  @@index([userId,matchId])
 }
@@ -163,6 +171,7 @@ model Round {
 }
 // Confidential: NEVER serialize this model through a generic REST endpoint.
 model GameSnapshot {
+ botState Json @default("{}")
  matchId String @id
  match Match @relation(fields:[matchId],references:[id],onDelete:Cascade)
  version Int
@@ -170,6 +179,7 @@ model GameSnapshot {
  updatedAt DateTime @updatedAt
 }
 model GameAction {
+ round Int @default(1)
  id String @id @default(cuid())
  matchId String
  match Match @relation(fields:[matchId],references:[id],onDelete:Cascade)
@@ -215,5 +225,23 @@ model PushToken {
  token String @id
  userId String
  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ @@index([userId])
+}
+
+model RoomBot {
+ id String @id @default(cuid())
+ roomId String
+ room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+ seat Int
+ name String
+ config Json
+ @@unique([roomId,seat])
+}
+model BotPreset {
+ id String @id @default(cuid())
+ userId String
+ user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+ name String
+ config Json
  @@index([userId])
 }

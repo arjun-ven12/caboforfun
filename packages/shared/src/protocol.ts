@@ -14,9 +14,14 @@ export type PublicIdentity = {
   userId: string;
   displayName: string;
   username: string | null;
+  kind?: "human" | "bot";
+  difficulty?: string;
+  personality?: string;
+  avatar?: number;
 };
 export type AuthorizedGameView = PlayerView & {
   matchId: string;
+  matchStartedAt: number;
   identities: Record<string, PublicIdentity>;
 };
 export type SwapNotification = {

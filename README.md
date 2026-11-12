@@ -145,3 +145,7 @@ Preview produces an APK; production Android produces an AAB. iOS requires Apple 
 Dependency choices were checked against [Expo SDK 58](https://expo.dev/changelog/sdk-58), its `bundledNativeModules.json`, [Better Auth Expo integration](https://better-auth.com/docs/integrations/expo) and [Express integration](https://better-auth.com/docs/integrations/express). Classic Cabo follows the [2019 published rule sheet](https://cdn.1j1ju.com/medias/81/a9/63-cabo-rulebook.pdf); the [publisher page](https://beziergames.com/pages/cabo) describes the face-down expert variant. This app uses generic numbered cards for that preset, never proprietary character artwork. Standard-deck adaptation values are Ace 1, 2–10 face value, all J/Q/K 10, no Jokers, with 7–8 own peek, 9–10 opponent peek, J–Q blind swap; it is not the official numbered game.
 
 Version 1.1 adds real-time private-safe swap feedback, bounded outgoing-card bonus abilities (Custom default ON), and unique readable usernames for existing and new accounts. See [the behavior, changed-file and verification report](docs/SWAP_RELEASE_1.1.md).
+
+## Play versus AI
+
+Home → **Play vs AI** supports 1–4 configurable opponents, five difficulties, personalities, practice, hosted solo controls and mixed multiplayer. See [AI architecture, setup, exact test/benchmark results and limits](docs/BOTS.md). Bots require no external AI key. Offline play is deferred; use a live backend for solo.

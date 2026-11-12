@@ -11,3 +11,5 @@ Immutable room rule snapshots are copied into each match. New rounds get new dec
 Verification layers: pure rules tests; Postgres-backed API/socket tests when TEST_DATABASE_URL is configured; Metro exports and TypeScript checks; physical-device and distribution checks remain a release gate.
 
 Swap exchanges and the pending private bonus queue are part of the same confidential snapshot transaction. A public position-only event ring supports reconnects; actor identities are resolved from current database profiles when projecting state. The username provisioning trigger fills legacy profiles and new accounts with unique readable handles. See [the 1.1 change record](SWAP_RELEASE_1.1.md) for bounds, compatibility and file-level details.
+
+AI seats are `RoomBot` records, never authentication accounts. Shared `legalActions`, observation, memory and strategy modules feed a server controller that saves private agent state with each authoritative transition. Match kind/configuration snapshots keep solo/mixed statistics separate from human-only records. See [AI architecture and boundaries](BOTS.md).

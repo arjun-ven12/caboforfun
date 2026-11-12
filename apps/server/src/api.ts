@@ -8,12 +8,25 @@ import {
 import { randomBytes, createHash, randomInt } from "node:crypto";
 import { fromNodeHeaders } from "better-auth/node";
 import { z } from "zod";
-import { customRules, presets, rulesSchema } from "@cabo/shared";
+import {
+  customRules,
+  presets,
+  rulesSchema,
+  botSeatSchema,
+  botConfigSchema,
+  botPresets,
+  decide,
+  botObservation,
+  playerView,
+  type Game,
+} from "@cabo/shared";
 import { auth } from "./auth.js";
 import { db, json } from "./db.js";
 import { check, locked, member, roomView, startMatch } from "./game-service.js";
 import { blocked, requestFriend, respondFriend, blockUser } from "./social.js";
 import { notify } from "./notifications.js";
+import { saveState } from "./game-service.js";
+import type { AgentMap } from "./bot-state.js";
 import { identities, publishIdentity } from "./identity.js";
 import { config } from "./config.js";
 export const api = Router();
@@ -238,6 +251,45 @@ api.post("/rooms", async (req, res) => {
   });
   res.json({ id: room.id, code: room.code });
 });
+api.post("/rooms/solo", async (req, res) => {
+  const input = z
+    .object({
+      rules: rulesSchema,
+      bots: z.array(botSeatSchema).min(1).max(4),
+      options: z.object({
+        fast: z.boolean(),
+        practice: z.boolean(),
+        animationSpeed: z.number().min(0.5).max(2),
+      }),
+    })
+    .parse(req.body);
+  check(
+    input.bots.length + 1 >= input.rules.minPlayers &&
+      input.bots.length + 1 <= input.rules.maxPlayers,
+    "PLAYER_COUNT",
+  );
+  const code = Array.from(
+    { length: 6 },
+    () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[randomInt(32)],
+  ).join("");
+  const room = await db.room.create({
+    data: {
+      code,
+      hostId: uid(res),
+      rules: json(input.rules),
+      botOptions: json(input.options),
+      members: { create: { userId: uid(res), seat: 0 } },
+      bots: {
+        create: input.bots.map((b, i) => ({
+          seat: i + 1,
+          name: b.name,
+          config: json(b.config),
+        })),
+      },
+    },
+  });
+  res.json({ id: room.id, code });
+});
 api.post("/rooms/join", async (req, res) => {
   const input = z
     .object({
@@ -268,7 +320,7 @@ api.post("/rooms/join", async (req, res) => {
   const newlyJoined = await locked(roomId, async (tx) => {
     const room = await tx.room.findUniqueOrThrow({
       where: { id: roomId },
-      include: { members: true },
+      include: { members: true, bots: true },
     });
     if (input.token) {
       const current = await tx.invitation.findUnique({
@@ -288,15 +340,21 @@ api.post("/rooms/join", async (req, res) => {
     const existing = room.members.some((m) => m.userId === uid(res));
     if (existing) return false;
     check(room.status === "lobby", "GAME_ALREADY_STARTED");
+    check(!(room.botOptions as any).practice, "PRACTICE_SOLO_ONLY");
     check(
       room.hostId && !(await blocked(uid(res), room.hostId)),
       "NOT_AVAILABLE",
       403,
     );
     const rules = rulesSchema.parse(room.rules);
-    check(room.members.length < rules.maxPlayers, "ROOM_FULL");
+    check(
+      room.members.length + room.bots.length < rules.maxPlayers,
+      "ROOM_FULL",
+    );
     const seat = Array.from({ length: 5 }, (_, i) => i).find(
-      (i) => !room.members.some((m) => m.seat === i),
+      (i) =>
+        !room.members.some((m) => m.seat === i) &&
+        !room.bots.some((b) => b.seat === i),
     )!;
     await tx.roomMember.create({ data: { roomId, userId: uid(res), seat } });
     return true;
@@ -313,6 +371,299 @@ api.post("/rooms/join", async (req, res) => {
     ).catch(() => {});
   res.json({ id: roomId });
 });
+api.get("/bots/presets", async (_req, res) =>
+  res.json({
+    builtIn: botPresets,
+    saved: await db.botPreset.findMany({ where: { userId: uid(res) } }),
+  }),
+);
+api.post("/bots/presets", async (req, res) => {
+  const name = z.string().trim().min(1).max(40).parse(req.body.name),
+    config = botConfigSchema.parse(req.body.config);
+  res.json(
+    await db.botPreset.create({
+      data: { userId: uid(res), name, config: json(config) },
+    }),
+  );
+});
+api.delete("/bots/presets/:id", async (req, res) => {
+  await db.botPreset.deleteMany({
+    where: { id: param(req), userId: uid(res) },
+  });
+  res.json({ ok: true });
+});
+api.post("/rooms/:id/bots", async (req, res) => {
+  const roomId = param(req),
+    input = botSeatSchema.parse(req.body);
+  const bot = await locked(roomId, async (tx) => {
+    const room = await tx.room.findUniqueOrThrow({
+      where: { id: roomId },
+      include: { members: true, bots: true },
+    });
+    check(room.hostId === uid(res), "HOST_ONLY", 403);
+    check(
+      room.status === "lobby" || room.status === "finished",
+      "RULES_LOCKED",
+    );
+    const rules = rulesSchema.parse(room.rules);
+    check(
+      room.members.length + room.bots.length < rules.maxPlayers,
+      "ROOM_FULL",
+    );
+    const seat = Array.from({ length: 5 }, (_, i) => i).find(
+      (i) => ![...room.members, ...room.bots].some((m) => m.seat === i),
+    )!;
+    const added = await tx.roomBot.create({
+      data: { roomId, seat, name: input.name, config: json(input.config) },
+    });
+    await tx.roomMember.updateMany({
+      where: { roomId },
+      data: { ready: false, rematch: false },
+    });
+    return added;
+  });
+  await publish(roomId);
+  res.json(bot);
+});
+api.put("/rooms/:id/bots/:botId", async (req, res) => {
+  const roomId = param(req),
+    input = botSeatSchema.parse(req.body);
+  await locked(roomId, async (tx) => {
+    const room = await tx.room.findUniqueOrThrow({ where: { id: roomId } });
+    check(room.hostId === uid(res), "HOST_ONLY", 403);
+    check(
+      room.status === "lobby" || room.status === "finished",
+      "RULES_LOCKED",
+    );
+    check(
+      (
+        await tx.roomBot.updateMany({
+          where: { id: param(req, "botId"), roomId },
+          data: { name: input.name, config: json(input.config) },
+        })
+      ).count,
+      "NOT_FOUND",
+      404,
+    );
+    await tx.roomMember.updateMany({
+      where: { roomId },
+      data: { ready: false, rematch: false },
+    });
+  });
+  await publish(roomId);
+  res.json({ ok: true });
+});
+api.delete("/rooms/:id/bots/:botId", async (req, res) => {
+  const roomId = param(req);
+  await locked(roomId, async (tx) => {
+    const room = await tx.room.findUniqueOrThrow({ where: { id: roomId } });
+    check(room.hostId === uid(res), "HOST_ONLY", 403);
+    check(
+      room.status === "lobby" || room.status === "finished",
+      "RULES_LOCKED",
+    );
+    await tx.roomBot.deleteMany({ where: { id: param(req, "botId"), roomId } });
+    await tx.roomMember.updateMany({
+      where: { roomId },
+      data: { ready: false, rematch: false },
+    });
+  });
+  await publish(roomId);
+  res.json({ ok: true });
+});
+api.put("/rooms/:id/bot-options", async (req, res) => {
+  const roomId = param(req),
+    options = z
+      .object({
+        fast: z.boolean(),
+        practice: z.boolean(),
+        animationSpeed: z.number().min(0.5).max(2),
+      })
+      .parse(req.body);
+  await locked(roomId, async (tx) => {
+    const room = await tx.room.findUniqueOrThrow({ where: { id: roomId } });
+    check(room.hostId === uid(res), "HOST_ONLY", 403);
+    const humans = await tx.roomMember.count({ where: { roomId } });
+    check(!options.practice || humans === 1, "SOLO_ONLY");
+    await tx.room.update({
+      where: { id: roomId },
+      data: { botOptions: json(options) },
+    });
+    if (options.fast && room.status === "playing" && room.activeMatchId) {
+      const snapshot = await tx.gameSnapshot.findUniqueOrThrow({
+          where: { matchId: room.activeMatchId },
+        }),
+        agents = snapshot.botState as unknown as AgentMap;
+      for (const agent of Object.values(agents))
+        if (agent.dueAt !== undefined)
+          agent.dueAt = Math.min(agent.dueAt, Date.now() + 20);
+      await tx.gameSnapshot.update({
+        where: { matchId: room.activeMatchId },
+        data: { botState: json(agents) },
+      });
+    }
+  });
+  await publish(roomId);
+  res.json({ ok: true });
+});
+api.post("/rooms/:id/solo", async (req, res) => {
+  const roomId = param(req),
+    action = z
+      .enum(["pause", "resume", "restart", "abandon", "lobby"])
+      .parse(req.body.action);
+  await locked(roomId, async (tx) => {
+    const room = await tx.room.findUniqueOrThrow({
+      where: { id: roomId },
+      include: { members: true, bots: true },
+    });
+    check(room.hostId === uid(res), "HOST_ONLY", 403);
+    check(room.members.length === 1 && room.bots.length > 0, "SOLO_ONLY");
+    check(room.activeMatchId, "NO_MATCH");
+    const snapshot = await tx.gameSnapshot.findUniqueOrThrow({
+        where: { matchId: room.activeMatchId },
+      }),
+      g = snapshot.state as unknown as Game,
+      now = Date.now();
+    if (action === "pause") {
+      check(room.status === "playing", "WRONG_ROOM_STATE");
+      if (room.soloPausedAt) return;
+      g.pausedAt ??= now;
+      g.version++;
+      await tx.room.update({
+        where: { id: roomId },
+        data: { soloPausedAt: new Date(now) },
+      });
+      await saveState(tx, room.activeMatchId, roomId, g);
+    } else if (action === "resume") {
+      check(room.soloPausedAt, "NOT_PAUSED");
+      g.deadline += now - (g.pausedAt ?? now);
+      delete g.pausedAt;
+      g.version++;
+      await tx.room.update({
+        where: { id: roomId },
+        data: { soloPausedAt: null },
+      });
+      await saveState(tx, room.activeMatchId, roomId, g);
+    } else {
+      check(
+        action === "lobby"
+          ? room.status === "finished"
+          : room.status === "playing",
+        "WRONG_ROOM_STATE",
+      );
+      if (room.status === "playing") {
+        // Abandoned games are recorded as losses rather than farming solo wins through restart.
+        g.phase = "matchOver";
+        g.forfeit = [uid(res)];
+        g.scores = [];
+        g.version++;
+        delete g.pausedAt;
+        if (g.drawn) g.discard.push(g.drawn.card);
+        delete g.drawn;
+        delete g.reveal;
+        delete g.activeAbility;
+        g.bonusQueue = [];
+        await saveState(tx, room.activeMatchId, roomId, g);
+      }
+      await tx.room.update({
+        where: { id: roomId },
+        data: {
+          status: action === "abandon" ? "cancelled" : "lobby",
+          activeMatchId: null,
+          soloPausedAt: null,
+        },
+      });
+      await tx.roomMember.updateMany({
+        where: { roomId },
+        data: { ready: false, rematch: false },
+      });
+    }
+  });
+  await publish(roomId);
+  res.json({ ok: true });
+});
+api.get("/rooms/:id/practice", async (req, res) => {
+  const roomId = param(req);
+  await member(db, roomId, uid(res));
+  const room = await db.room.findUniqueOrThrow({
+    where: { id: roomId },
+    include: { members: true, bots: true },
+  });
+  check(
+    room.members.length === 1 &&
+      room.bots.length > 0 &&
+      (room.botOptions as any).practice,
+    "PRACTICE_DISABLED",
+    403,
+  );
+  check(room.activeMatchId, "NO_MATCH");
+  const snap = await db.gameSnapshot.findUniqueOrThrow({
+    where: { matchId: room.activeMatchId },
+  });
+  const g = snap.state as unknown as Game;
+  // Stateless hints use only the human's current authorized view, never bot memories or hidden hands.
+  const view = playerView(g, uid(res));
+  const { remember } = await import("@cabo/shared");
+  const memory = remember(
+    view,
+    uid(res),
+    undefined,
+    botPresets.master,
+    () => 0.5,
+  );
+  const o = botObservation(view, uid(res), memory, Date.now());
+  const d = decide(o, botPresets.master, () => 0.5);
+  res.json({
+    suggestion: d?.command,
+    suggestionLabel: (() => {
+      const a = d?.command;
+      if (!a) return undefined;
+      switch (a.type) {
+        case "draw":
+          return a.source === "deck"
+            ? "Consider drawing from the deck."
+            : "Consider taking the visible discard.";
+        case "replace":
+          return `Consider replacing your card positions ${a.indices.map((i) => i + 1).join(", ")}.`;
+        case "cabo":
+          return "Consider calling Cabo.";
+        case "discard":
+          return "Consider discarding this draw.";
+        case "activate":
+          return "Consider using this card’s ability.";
+        case "inspect":
+          return `Inspect ${g.rules.initialPeek} starting cards.`;
+        case "ready":
+          return "Turn your inspected cards over when ready.";
+        case "target":
+          return `Consider card ${a.index + 1} ${a.owner === uid(res) ? "in your hand" : `belonging to ${room.bots.find((b) => `bot:${b.id}` === a.owner)?.name ?? "your opponent"}`}${a.ownIndex !== undefined ? ` and your card ${a.ownIndex + 1}` : ""}.`;
+        case "resolveSwap":
+          return a.ownIndex === undefined
+            ? "Keep both hands as they are."
+            : `Consider swapping your card ${a.ownIndex + 1}.`;
+        case "finishAbility":
+          return "Finish your private peek.";
+        case "nextRound":
+          return "Deal the next round when ready.";
+        case "finishMatch":
+          return "Finish this match when ready.";
+      }
+    })(),
+    hint:
+      d?.reason ??
+      "Use private peeks to remember cards. Public swaps move physical cards; invalidate old positions when replacement is uncertain.",
+    roundReview: ["roundOver", "matchOver"].includes(g.phase)
+      ? g.scores.map((s) => ({
+          id: s.id,
+          raw: s.raw,
+          penalty: s.penalty,
+          tip: s.penalty
+            ? "A failed Cabo call added a penalty. Consider uncertain cards before calling."
+            : "Compare raw hand points with the revealed lowest hand.",
+        }))
+      : undefined,
+  });
+});
 api.get("/rooms/:id", async (req, res) =>
   res.json(await roomView(param(req), uid(res))),
 );
@@ -324,7 +675,11 @@ api.put("/rooms/:id/rules", async (req, res) => {
     check(room.hostId === uid(res), "HOST_ONLY", 403);
     check(room.status === "lobby", "RULES_LOCKED");
     const count = await tx.roomMember.count({ where: { roomId } });
-    check(count <= rules.maxPlayers, "TOO_MANY_MEMBERS");
+    check(
+      count + (await tx.roomBot.count({ where: { roomId } })) <=
+        rules.maxPlayers,
+      "TOO_MANY_MEMBERS",
+    );
     await tx.room.update({
       where: { id: roomId },
       data: { rules: json(rules) },
@@ -517,7 +872,12 @@ api.get("/matches", async (_req, res) => {
     where: { userId: uid(res), match: { completedAt: { not: null } } },
     include: {
       match: {
-        include: { rounds: true, participants: { select: { userId: true } } },
+        include: {
+          rounds: true,
+          participants: {
+            select: { userId: true, identity: true, botConfig: true },
+          },
+        },
       },
     },
     orderBy: { match: { createdAt: "desc" } },
@@ -527,28 +887,106 @@ api.get("/matches", async (_req, res) => {
     rows.flatMap((r) => r.match.participants.map((p) => p.userId)),
   );
   res.json(
-    rows.map((r) => ({ ...r, match: { ...r.match, identities: people } })),
+    rows.map((r) => ({
+      ...r,
+      match: {
+        ...r.match,
+        identities: {
+          ...people,
+          ...Object.fromEntries(
+            r.match.participants
+              .filter((p) => p.identity)
+              .map((p) => [p.userId, p.identity]),
+          ),
+        },
+      },
+    })),
   );
 });
 api.get("/stats", async (_req, res) => {
-  const matches = await db.matchParticipant.findMany({
+  const rows = await db.matchParticipant.findMany({
     where: { userId: uid(res), match: { completedAt: { not: null } } },
-    include: { match: { select: { rounds: true } } },
+    include: { match: { include: { rounds: true, participants: true } } },
+    orderBy: { match: { completedAt: "asc" } },
   });
-  const wins = matches.filter((m) => m.winner).length;
-  const raw = matches.flatMap((m) =>
-    m.match.rounds.flatMap((r) =>
-      (r.scores as unknown as { id: string; raw: number }[])
-        .filter((s) => s.id === uid(res))
-        .map((s) => s.raw),
-    ),
+  function summary(matches: typeof rows) {
+    const wins = matches.filter((m) => m.winner).length,
+      raw = matches.flatMap((m) =>
+        m.match.rounds.flatMap((r) =>
+          (r.scores as unknown as { id: string; raw: number }[])
+            .filter((s) => s.id === uid(res))
+            .map((s) => s.raw),
+        ),
+      );
+    return {
+      games: matches.length,
+      wins,
+      losses: matches.length - wins,
+      winRate: matches.length ? wins / matches.length : 0,
+      averageHand: raw.length ? raw.reduce((a, b) => a + b, 0) / raw.length : 0,
+      bestHand: raw.length ? Math.min(...raw) : null,
+    };
+  }
+  const human = rows.filter((m) => m.match.kind === "human"),
+    solo = rows.filter((m) => m.match.kind === "solo"),
+    mixed = rows.filter((m) => m.match.kind === "mixed");
+  const calls = await db.gameAction.findMany({
+    where: {
+      userId: uid(res),
+      type: "cabo",
+      match: { kind: "solo", completedAt: { not: null } },
+    },
+  });
+  const successful = calls.filter((a) => {
+    const round = solo
+      .find((m) => m.matchId === a.matchId)
+      ?.match.rounds.find((r) => r.number === a.round);
+    const scores = (round?.scores ?? []) as unknown as {
+      id: string;
+      raw: number;
+      penalty: number;
+      winner: boolean;
+    }[];
+    const me = scores.find((s) => s.id === uid(res));
+    return me?.winner === true;
+  }).length;
+  let streak = 0,
+    longest = 0;
+  for (const m of solo) {
+    streak = m.winner ? streak + 1 : 0;
+    longest = Math.max(longest, streak);
+  }
+  const byDifficulty = Object.fromEntries(
+    [...Object.keys(botPresets), "custom"].map((key) => [
+      key,
+      summary(
+        solo.filter((m) =>
+          m.match.participants.some(
+            (p) => (p.botConfig as any)?.difficulty === key,
+          ),
+        ),
+      ),
+    ]),
   );
+  const ruleNames = [
+    ...new Set(solo.map((m) => (m.match.rules as any).name as string)),
+  ];
   res.json({
-    games: matches.length,
-    wins,
-    losses: matches.length - wins,
-    winRate: matches.length ? wins / matches.length : 0,
-    averageHand: raw.length ? raw.reduce((a, b) => a + b, 0) / raw.length : 0,
+    ...summary(human),
+    solo: {
+      ...summary(solo),
+      caboCalls: calls.length,
+      successfulCaboCalls: successful,
+      longestStreak: longest,
+      byDifficulty,
+      byRules: Object.fromEntries(
+        ruleNames.map((name) => [
+          name,
+          summary(solo.filter((m) => (m.match.rules as any).name === name)),
+        ]),
+      ),
+    },
+    mixed: summary(mixed),
   });
 });
 api.delete("/notifications/token", async (req, res) => {

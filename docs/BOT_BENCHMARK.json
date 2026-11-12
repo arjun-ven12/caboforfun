@@ -1,0 +1,116 @@
+{
+  "generatedAt": "2026-11-12T04:46:36.020Z",
+  "seedPolicy": "1..N seed pairs, both seat orders per seed; independent engine and per-bot PRNG streams",
+  "comparison": "Paired seeded matches against Master; exploratory, not proof of monotonic difficulty or human strength",
+  "results": [
+    {
+      "difficulty": "beginner",
+      "opponent": "master",
+      "games": 2000,
+      "seedPairs": 1000,
+      "outrightWins": 387,
+      "ties": 87,
+      "losses": 1526,
+      "incomplete": 0,
+      "winShare": 0.21525,
+      "pairedScore95Interval": [
+        0.19848333518707587,
+        0.23201666481292413
+      ],
+      "averageActions": 23.227,
+      "p95MatchMs": 12.904633000000103,
+      "meanMatchMs": 6.644081690999996
+    },
+    {
+      "difficulty": "casual",
+      "opponent": "master",
+      "games": 2000,
+      "seedPairs": 1000,
+      "outrightWins": 561,
+      "ties": 84,
+      "losses": 1355,
+      "incomplete": 0,
+      "winShare": 0.3015,
+      "pairedScore95Interval": [
+        0.2832646979009768,
+        0.3197353020990232
+      ],
+      "averageActions": 23.5025,
+      "p95MatchMs": 12.874472999999853,
+      "meanMatchMs": 6.6030741954999925
+    },
+    {
+      "difficulty": "intermediate",
+      "opponent": "master",
+      "games": 2000,
+      "seedPairs": 1000,
+      "outrightWins": 739,
+      "ties": 93,
+      "losses": 1168,
+      "incomplete": 0,
+      "winShare": 0.39275,
+      "pairedScore95Interval": [
+        0.3733809159401556,
+        0.4121190840598444
+      ],
+      "averageActions": 23.4305,
+      "p95MatchMs": 13.984465000001364,
+      "meanMatchMs": 6.8341122815001
+    },
+    {
+      "difficulty": "expert",
+      "opponent": "master",
+      "games": 2000,
+      "seedPairs": 1000,
+      "outrightWins": 933,
+      "ties": 103,
+      "losses": 964,
+      "incomplete": 0,
+      "winShare": 0.49225,
+      "pairedScore95Interval": [
+        0.47340239017020214,
+        0.5110976098297979
+      ],
+      "averageActions": 20.0155,
+      "p95MatchMs": 12.453466999999364,
+      "meanMatchMs": 6.177549128000032
+    },
+    {
+      "difficulty": "master",
+      "opponent": "master",
+      "games": 2000,
+      "seedPairs": 1000,
+      "outrightWins": 962,
+      "ties": 76,
+      "losses": 962,
+      "incomplete": 0,
+      "winShare": 0.5,
+      "pairedScore95Interval": [
+        0.5,
+        0.5
+      ],
+      "averageActions": 19.148,
+      "p95MatchMs": 12.453836000000592,
+      "meanMatchMs": 6.0191802294999945
+    }
+  ],
+  "compatibility": [
+    {
+      "preset": "My Custom Cabo",
+      "games": 50,
+      "completed": 50
+    },
+    {
+      "preset": "Classic Standard Deck",
+      "games": 50,
+      "completed": 50
+    },
+    {
+      "preset": "Classic Cabo (2019)",
+      "games": 50,
+      "completed": 50
+    }
+  ],
+  "totalActions": 218647,
+  "elapsedMs": 71449.393709
+}

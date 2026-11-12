@@ -1,3 +1,5 @@
+import { playerView as playerViewForTest } from "@cabo/shared";
+import { botPresets, remember } from "@cabo/shared";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -53,6 +55,15 @@ async function cmd(
         (err: any, r: any) => (err ? reject(err) : resolve(r)),
       ),
   );
+}
+async function memoryCmd(who: number, command: unknown) {
+  for (let n = 0; n < 10; n++) {
+    const g = (await sync(who)).game;
+    const result = await cmd(who, command, g.version);
+    if (result.error !== "STALE_VERSION") return result;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error("Memory actions did not converge");
 }
 async function startBackend() {
   server = spawn(
@@ -475,6 +486,378 @@ describe.skipIf(!enabled)(
         await db.$disconnect();
       }
     }, 20000);
+    it("plays solo with persisted real bots, pause, rematch and separated statistics", async () => {
+      const previous = roomId;
+      const database = new PrismaClient({
+        datasourceUrl: process.env.TEST_DATABASE_URL,
+      });
+      try {
+        const stats = (await http("/api/stats")).data;
+        const preset = await http("/api/bots/presets", 0, {
+          name: "My analytical bot",
+          config: { ...botPresets.expert, personality: "analytical" },
+        });
+        expect(preset.status).toBe(200);
+        expect(
+          (await http("/api/bots/presets")).data.saved.some(
+            (p: any) => p.id === preset.data.id,
+          ),
+        ).toBe(true);
+        await http(
+          `/api/bots/presets/${preset.data.id}`,
+          1,
+          undefined,
+          "DELETE",
+        );
+        expect(
+          (await http("/api/bots/presets")).data.saved.some(
+            (p: any) => p.id === preset.data.id,
+          ),
+        ).toBe(true);
+        await http(
+          `/api/bots/presets/${preset.data.id}`,
+          0,
+          undefined,
+          "DELETE",
+        );
+
+        const created = await http("/api/rooms/solo", 0, {
+          rules: { ...customRules, memorySeconds: 0 },
+          bots: [
+            { name: "Nova", config: { ...botPresets.master, delayMs: 0 } },
+          ],
+          options: { fast: true, practice: true, animationSpeed: 2 },
+        });
+        expect(created.status).toBe(200);
+        roomId = created.data.id;
+        const added = { status: 200, data: (await sync()).bots[0] };
+        const botId = `bot:${added.data.id}`;
+        expect(
+          await database.user.findUnique({ where: { id: botId } }),
+        ).toBeNull();
+        await http(
+          `/api/rooms/${roomId}/bot-options`,
+          0,
+          { fast: true, practice: true, animationSpeed: 2 },
+          "PUT",
+        );
+        await http(`/api/rooms/${roomId}/ready`, 0, { ready: true });
+        expect((await http(`/api/rooms/${roomId}/start`, 0, {})).status).toBe(
+          200,
+        );
+        let r = await sync();
+        expect(r.game.identities[botId]).toMatchObject({
+          kind: "bot",
+          username: null,
+          difficulty: "master",
+        });
+        expect(JSON.stringify(r)).not.toMatch(
+          /botState|discardPile|"seed"|"confidence"/,
+        );
+        expect(
+          (
+            await http(
+              `/api/rooms/${roomId}/bots/${added.data.id}`,
+              0,
+              { name: "Cheat", config: botPresets.beginner },
+              "PUT",
+            )
+          ).status,
+        ).toBe(400);
+        expect(
+          (await memoryCmd(0, { type: "inspect", indices: [0, 1] })).ok,
+        ).toBe(true);
+        r = await sync();
+        expect((await memoryCmd(0, { type: "ready" })).ok).toBe(true);
+        for (let n = 0; n < 100 && (await sync()).game.phase === "memory"; n++)
+          await new Promise((r) => setTimeout(r, 100));
+        expect(
+          (await http(`/api/rooms/${roomId}/solo`, 0, { action: "pause" }))
+            .status,
+        ).toBe(200);
+        const paused = (await sync()).game;
+        await new Promise((r) => setTimeout(r, 150));
+        expect((await sync()).game.version).toBe(paused.version);
+        expect(
+          (await cmd(0, { type: "draw", source: "deck" }, paused.version))
+            .error,
+        ).toBe("GAME_PAUSED");
+        expect(
+          (await http(`/api/rooms/${roomId}/solo`, 0, { action: "resume" }))
+            .status,
+        ).toBe(200);
+        expect((await http(`/api/rooms/${roomId}/practice`)).status).toBe(200);
+        let g = (await sync()).game;
+        expect((await cmd(0, { type: "cabo" }, g.version)).ok).toBe(true);
+        for (
+          let n = 0;
+          n < 200 && (await sync()).game.phase !== "matchOver";
+          n++
+        )
+          await new Promise((r) => setTimeout(r, 100));
+        r = await sync();
+        expect(r.game.phase).toBe("matchOver");
+        expect(r.game.scores).toHaveLength(2);
+        const result = (await http("/api/stats")).data;
+        expect(result.games).toBe(stats.games);
+        expect(result.solo.games).toBe(stats.solo.games + 1);
+        expect(result.solo.caboCalls).toBeGreaterThan(stats.solo.caboCalls);
+        expect(
+          (await http("/api/matches")).data.some(
+            (m: any) =>
+              m.match.kind === "solo" &&
+              m.match.identities[botId].kind === "bot",
+          ),
+        ).toBe(true);
+        await http(
+          `/api/rooms/${roomId}/bots/${added.data.id}`,
+          0,
+          { name: "Nova", config: botPresets.beginner },
+          "PUT",
+        );
+        await http(`/api/rooms/${roomId}/ready`, 0, { ready: true });
+        expect(
+          (await http(`/api/rooms/${roomId}/start`, 0, { rematch: true }))
+            .status,
+        ).toBe(200);
+        const next = await sync();
+        expect(next.activeMatchId).not.toBe(r.activeMatchId);
+        expect(next.game.identities[botId].difficulty).toBe("beginner");
+        expect(next.game.history).toEqual([]);
+        expect(
+          (await http(`/api/rooms/${roomId}/solo`, 0, { action: "restart" }))
+            .status,
+        ).toBe(200);
+        expect((await sync()).status).toBe("lobby");
+      } finally {
+        roomId = previous;
+        await database.$disconnect();
+      }
+    }, 15000);
+    it("bot swap grants a private bonus and recovers its due action after backend restart", async () => {
+      const previous = roomId,
+        database = new PrismaClient({
+          datasourceUrl: process.env.TEST_DATABASE_URL,
+        });
+      try {
+        const created = await http("/api/rooms", 0, {
+          rules: { ...customRules, memorySeconds: 0 },
+        });
+        roomId = created.data.id;
+        const b = await http(`/api/rooms/${roomId}/bots`, 0, {
+            name: "Atlas",
+            config: { ...botPresets.master, delayMs: 1000 },
+          }),
+          botId = `bot:${b.data.id}`;
+        await http(`/api/rooms/${roomId}/ready`, 0, { ready: true });
+        await http(`/api/rooms/${roomId}/start`, 0, {});
+        await http(`/api/rooms/${roomId}/solo`, 0, { action: "pause" });
+        const r = await sync(),
+          snap = await database.gameSnapshot.findUniqueOrThrow({
+            where: { matchId: r.activeMatchId },
+          });
+        const g = snap.state as unknown as Game,
+          card = (key: string) =>
+            createDeck(customRules).find((c) => c.key === key)!;
+        const bot = g.players.find((p) => p.id === botId)!;
+        bot.hand[0] = card("J-clubs");
+        bot.hand[1] = card("A-clubs");
+        bot.ready = false;
+        bot.inspected = [0, 1];
+        g.phase = "memory";
+        delete g.pausedAt;
+        g.version++;
+        const agents = snap.botState as any;
+        agents[botId].memory = remember(
+          playerViewForTest(g, botId),
+          botId,
+          undefined,
+          botPresets.master,
+          () => 0.5,
+        );
+        bot.ready = true;
+        g.phase = "ability";
+        g.turn = g.players.findIndex((p) => p.id === botId);
+        g.version++;
+        g.deadline = Date.now() + 60000;
+        g.drawn = { source: "deck", card: card("9-clubs") };
+        g.activeAbility = { ability: "blindSwap", origin: "draw", depth: 0 };
+        delete agents[botId].dueAt;
+        await database.gameSnapshot.update({
+          where: { matchId: r.activeMatchId },
+          data: {
+            state: JSON.parse(JSON.stringify(g)),
+            version: g.version,
+            botState: agents,
+          },
+        });
+        await database.room.update({
+          where: { id: roomId },
+          data: { soloPausedAt: null },
+        });
+        const events: any[] = [];
+        const listener = (e: any) => {
+          if (e.roomId === roomId) events.push(e);
+        };
+        clients[0].on("game:swap", listener);
+        for (let n = 0; n < 200; n++) {
+          const v = (await sync()).game;
+          if (v.swapHistory.length && v.turn === botId && v.phase === "ability")
+            break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        let after = (await sync()).game;
+        expect(after.swapHistory).toHaveLength(1);
+        expect(after.activeAbility).toBeUndefined();
+        expect(after.reveal).toBeUndefined();
+        expect(events).toHaveLength(1);
+        expect(events[0].actor.kind).toBe("bot");
+        expect(JSON.stringify(events)).not.toMatch(/J-clubs|peekOpponent/);
+        for (const c of clients) c.disconnect();
+        const exited = new Promise((resolve) => server.once("exit", resolve));
+        server.kill("SIGTERM");
+        await exited;
+        await startBackend();
+        for (const c of clients) {
+          c.connect();
+          await new Promise<void>((r, j) => {
+            c.once("connect", r);
+            c.once("connect_error", j);
+          });
+        }
+        for (let n = 0; n < 200 && (await sync()).game.turn === botId; n++)
+          await new Promise((r) => setTimeout(r, 100));
+        after = (await sync()).game;
+        expect(after.turn).toBe(users[0]);
+        expect(after.swapHistory).toHaveLength(1);
+        const actions = await database.gameAction.findMany({
+          where: { matchId: r.activeMatchId, userId: botId },
+          orderBy: { version: "asc" },
+        });
+        expect(actions.map((a) => a.type)).toEqual([
+          "target",
+          "target",
+          "finishAbility",
+        ]);
+        expect(new Set(actions.map((a) => a.version)).size).toBe(3);
+        clients[0].off("game:swap", listener);
+        await http(`/api/rooms/${roomId}/solo`, 0, { action: "abandon" });
+      } finally {
+        roomId = previous;
+        await database.$disconnect();
+      }
+    }, 20000);
+    it("mixed rooms count bot seats, preserve human authorization and finish without bot sessions", async () => {
+      const previous = roomId;
+      try {
+        const created = await http("/api/rooms", 0, {
+          rules: { ...customRules, memorySeconds: 0, maxPlayers: 3 },
+        });
+        roomId = created.data.id;
+        expect(
+          (
+            await http(`/api/rooms/${roomId}/bots`, 1, {
+              name: "Spoof",
+              config: botPresets.master,
+            })
+          ).status,
+        ).toBe(403);
+        await http(`/api/rooms/${roomId}/bots`, 0, {
+          name: "Echo",
+          config: { ...botPresets.expert, delayMs: 0 },
+        });
+        await http("/api/rooms/join", 1, { code: created.data.code });
+        expect(
+          (
+            await http(`/api/rooms/${roomId}/bots`, 0, {
+              name: "Too many",
+              config: botPresets.master,
+            })
+          ).status,
+        ).toBe(400);
+        await http(
+          `/api/rooms/${roomId}/bot-options`,
+          0,
+          { fast: true, practice: false, animationSpeed: 1 },
+          "PUT",
+        );
+        for (let i = 0; i < 2; i++)
+          await http(`/api/rooms/${roomId}/ready`, i, { ready: true });
+        await http(`/api/rooms/${roomId}/start`, 0, {});
+        expect(
+          (await http(`/api/rooms/${roomId}/solo`, 0, { action: "pause" }))
+            .status,
+        ).toBe(400);
+        expect((await http(`/api/rooms/${roomId}/practice`)).status).toBe(403);
+        for (let i = 0; i < 2; i++) {
+          let g = (await sync(i)).game;
+          await memoryCmd(i, { type: "inspect", indices: [0, 1] });
+          g = (await sync(i)).game;
+          await memoryCmd(i, { type: "ready" });
+        }
+        for (let n = 0; n < 100 && (await sync()).game.phase === "memory"; n++)
+          await new Promise((r) => setTimeout(r, 100));
+        let g = (await sync()).game;
+        await cmd(0, { type: "cabo" }, g.version);
+        for (let n = 0; n < 100 && (await sync(1)).game.turn !== users[1]; n++)
+          await new Promise((r) => setTimeout(r, 100));
+        g = (await sync(1)).game;
+        const draw = await cmd(1, { type: "draw", source: "deck" }, g.version);
+        await cmd(1, { type: "discard" }, draw.data.version);
+        for (
+          let n = 0;
+          n < 200 && (await sync()).game.phase !== "matchOver";
+          n++
+        )
+          await new Promise((r) => setTimeout(r, 100));
+        expect((await sync()).game.phase).toBe("matchOver");
+        expect(
+          (await http("/api/matches")).data.some(
+            (m: any) => m.match.kind === "mixed",
+          ),
+        ).toBe(true);
+        for (let i = 0; i < 2; i++)
+          await http(`/api/rooms/${roomId}/ready`, i, { ready: true });
+        const roster = (await sync()).bots;
+        await http(
+          `/api/rooms/${roomId}/bots/${roster[0].id}`,
+          0,
+          { name: "Echo", config: botPresets.master },
+          "PUT",
+        );
+        expect(
+          (await http(`/api/rooms/${roomId}/start`, 0, { rematch: true }))
+            .status,
+        ).toBe(400);
+      } finally {
+        roomId = previous;
+      }
+    }, 15000);
+    it("keeps a transferred human host as round organizer when a bot has a lower seat", async () => {
+      const previous = roomId;
+      try {
+        const created = await http("/api/rooms", 0, {
+          rules: { ...customRules, memorySeconds: 0 },
+        });
+        roomId = created.data.id;
+        await http(`/api/rooms/${roomId}/bots`, 0, {
+          name: "Sage",
+          config: botPresets.casual,
+        });
+        await http("/api/rooms/join", 1, { code: created.data.code });
+        await http(`/api/rooms/${roomId}/membership`, 0, undefined, "DELETE");
+        await http(`/api/rooms/${roomId}/ready`, 1, { ready: true });
+        expect((await http(`/api/rooms/${roomId}/start`, 1, {})).status).toBe(
+          200,
+        );
+        const view = (await http(`/api/rooms/${roomId}`, 1)).data;
+        expect(view.hostId).toBe(users[1]);
+        expect(view.game.players[0].id).toBe(users[1]);
+        await http(`/api/rooms/${roomId}/solo`, 1, { action: "abandon" });
+      } finally {
+        roomId = previous;
+      }
+    });
     it("blocking removes friendship and prevents new requests", async () => {
       expect((await http(`/api/friends/${users[1]}/block`, 0, {})).status).toBe(
         200,

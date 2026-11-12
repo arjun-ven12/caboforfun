@@ -15,7 +15,9 @@
     "db:migrate": "npm run db:migrate -w @cabo/server",
     "railway": "node scripts/railway-command.mjs",
     "test:release": "node --test apps/mobile/scripts/release-config.check.cjs",
-    "verify:live": "node scripts/verify-live.mjs"
+    "verify:live": "node scripts/verify-live.mjs",
+    "benchmark:bots": "node --import tsx scripts/benchmark-bots.ts",
+    "verify:bots-live": "node scripts/verify-bots-live.mjs"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

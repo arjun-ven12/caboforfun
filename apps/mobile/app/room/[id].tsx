@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Share, View } from "react-native";
+import { Share, View, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import * as Crypto from "expo-crypto";
-import type { Command, PlayerView, SwapNotification } from "@cabo/shared";
+import type {
+  Ack,
+  Command,
+  AuthorizedGameView,
+  SwapNotification,
+} from "@cabo/shared";
 import { auth, api, connect, queryClient } from "../../src/client";
 import {
   Screen,
@@ -22,6 +27,7 @@ export default function Room() {
   const { id } = useLocalSearchParams<{ id: string }>(),
     { data: session } = auth.useSession(),
     [busy, setBusy] = useState(false),
+    [controls, setControls] = useState(false),
     [error, setError] = useState<unknown>(),
     [online, setOnline] = useState(false),
     [clockOffset, setClockOffset] = useState(0);
@@ -46,12 +52,17 @@ export default function Room() {
     };
     const down = () => setOnline(false);
     const state = (
-      view: PlayerView & { roomId: string; serverTime: number },
+      view: AuthorizedGameView & { roomId: string; serverTime: number },
     ) => {
       if (view.roomId !== id) return;
       setClockOffset(view.serverTime - Date.now());
       queryClient.setQueryData(["room", id], (old: any) =>
-        old && (!old.game || view.version >= old.game.version)
+        old &&
+        (!old.game ||
+          (view.matchId !== old.game.matchId &&
+            view.matchStartedAt >= (old.game.matchStartedAt ?? 0)) ||
+          (view.matchId === old.game.matchId &&
+            view.version >= old.game.version))
           ? { ...old, game: view }
           : old,
       );
@@ -102,40 +113,69 @@ export default function Room() {
       setBusy(false);
     }
   }
-  function send(command: Command) {
+  async function send(command: Command) {
     if (busy || !r?.game) return;
+    const original = r.game,
+      actionId = Crypto.randomUUID();
+    let version = original.version;
     setBusy(true);
     setError(undefined);
-    connect()
-      .timeout(10000)
-      .emit(
-        "game:command",
-        {
-          roomId: id,
-          actionId: Crypto.randomUUID(),
-          version: r.game.version,
-          command,
-        },
-        (err, ack) => {
-          setBusy(false);
-          if (err) {
-            setError(
-              new Error("Connection interrupted. Synchronizing your game."),
-            );
-            void q.refetch();
-            return;
+    try {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const ack = await new Promise<Ack<AuthorizedGameView>>(
+          (resolve, reject) =>
+            connect()
+              .timeout(10000)
+              .emit(
+                "game:command",
+                { roomId: id, actionId, version, command },
+                (err, ack) =>
+                  err
+                    ? reject(
+                        new Error(
+                          "Connection interrupted. Synchronizing your game.",
+                        ),
+                      )
+                    : resolve(ack),
+              ),
+        );
+        if (ack.ok) {
+          queryClient.setQueryData(["room", id], (old: any) =>
+            old &&
+            (!old.game ||
+              (old.game.matchId === ack.data.matchId &&
+                ack.data.version >= old.game.version))
+              ? { ...old, game: ack.data }
+              : old,
+          );
+          return;
+        }
+        if (
+          ack.error === "STALE_VERSION" &&
+          (command.type === "inspect" || command.type === "ready")
+        ) {
+          const fresh = await api(`/rooms/${id}`);
+          queryClient.setQueryData(["room", id], fresh);
+          if (
+            fresh.game?.matchId === original.matchId &&
+            fresh.game.round === original.round &&
+            fresh.game.phase === "memory"
+          ) {
+            version = fresh.game.version;
+            continue;
           }
-          if (!ack.ok) {
-            setError(new Error(ack.error));
-            void q.refetch();
-            return;
-          }
-          queryClient.setQueryData(["room", id], (old: any) => ({
-            ...old,
-            game: ack.data,
-          }));
-        },
+        }
+        throw new Error(ack.error);
+      }
+      throw new Error(
+        "The table changed while preparing your cards. Please try again.",
       );
+    } catch (e) {
+      setError(e);
+      void q.refetch();
+    } finally {
+      setBusy(false);
+    }
   }
   if (!session)
     return (
@@ -153,8 +193,158 @@ export default function Room() {
     );
   const me = r.members.find((m: any) => m.userId === session.user.id),
     host = r.hostId === session.user.id;
+  const solo =
+    r.bots?.length > 0 &&
+    r.members.filter((m: any) => m.kind !== "bot").length === 1;
   return (
     <Screen>
+      {host && r.status !== "playing" && (
+        <Button
+          secondary
+          title="AI opponents · add or configure"
+          onPress={() => router.push(`/bots?roomId=${id}`)}
+        />
+      )}
+      {host && r.bots?.length > 0 && r.status === "playing" && (
+        <Button
+          secondary
+          title={controls ? "Hide game controls" : "Game controls"}
+          onPress={() => setControls(!controls)}
+        />
+      )}
+      {solo && r.status === "playing" && (controls || r.soloPausedAt) && (
+        <Panel>
+          <Row>
+            <Button
+              secondary
+              title={r.soloPausedAt ? "Resume" : "Pause"}
+              busy={busy}
+              onPress={() =>
+                void run(() =>
+                  api(`/rooms/${id}/solo`, {
+                    action: r.soloPausedAt ? "resume" : "pause",
+                  }),
+                )
+              }
+            />
+            <Button
+              secondary
+              title="Restart"
+              disabled={busy}
+              onPress={() =>
+                Alert.alert(
+                  "Restart this match?",
+                  "The current match will be recorded as abandoned. Your next table keeps its bots and rules.",
+                  [
+                    { text: "Keep playing", style: "cancel" },
+                    {
+                      text: "Restart",
+                      style: "destructive",
+                      onPress: () =>
+                        void run(() =>
+                          api(`/rooms/${id}/solo`, { action: "restart" }),
+                        ),
+                    },
+                  ],
+                )
+              }
+            />
+          </Row>
+          <Button
+            secondary
+            title="Abandon match"
+            onPress={() =>
+              Alert.alert("Leave this match?", "This records a solo loss.", [
+                { text: "Stay", style: "cancel" },
+                {
+                  text: "Leave",
+                  style: "destructive",
+                  onPress: () =>
+                    void run(async () => {
+                      await api(`/rooms/${id}/solo`, { action: "abandon" });
+                      router.replace("/(main)");
+                    }),
+                },
+              ])
+            }
+          />
+        </Panel>
+      )}
+      {r.bots?.length > 0 && host && controls && (
+        <Panel>
+          <Button
+            secondary
+            title={r.botOptions?.fast ? "Fast Mode · on" : "Fast Mode · off"}
+            onPress={() =>
+              void run(() =>
+                api(
+                  `/rooms/${id}/bot-options`,
+                  {
+                    fast: !r.botOptions?.fast,
+                    practice: !!r.botOptions?.practice,
+                    animationSpeed: r.botOptions?.animationSpeed ?? 1,
+                  },
+                  "PUT",
+                ),
+              )
+            }
+          />
+          <Row>
+            {[0.5, 1, 2].map((n) => (
+              <Button
+                key={n}
+                secondary
+                title={`${n}× motion`}
+                onPress={() =>
+                  void run(() =>
+                    api(
+                      `/rooms/${id}/bot-options`,
+                      {
+                        fast: !!r.botOptions?.fast,
+                        practice: !!r.botOptions?.practice,
+                        animationSpeed: n,
+                      },
+                      "PUT",
+                    ),
+                  )
+                }
+              />
+            ))}
+          </Row>
+        </Panel>
+      )}
+      {solo && r.status === "finished" && (
+        <Button
+          secondary
+          title="Change rules & difficulty for next match"
+          onPress={() =>
+            void run(() => api(`/rooms/${id}/solo`, { action: "lobby" }))
+          }
+        />
+      )}
+      {solo && r.botOptions?.practice && (
+        <Button
+          secondary
+          title="Practice insight"
+          onPress={() =>
+            void run(async () => {
+              const advice = await api(`/rooms/${id}/practice`);
+              Alert.alert(
+                "Practice · your information only",
+                [
+                  advice.suggestionLabel,
+                  advice.hint,
+                  ...(advice.roundReview ?? [])
+                    .filter((s: any) => s.id === session.user.id)
+                    .map((s: any) => s.tip),
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
+              );
+            })
+          }
+        />
+      )}
       <Row>
         <Txt size={12} style={{ letterSpacing: 3 }}>
           TABLE {r.code}
@@ -179,6 +369,8 @@ export default function Room() {
           key={r.game.matchId}
           game={r.game}
           clockOffset={clockOffset}
+          animationSpeed={r.botOptions?.animationSpeed ?? 1}
+          manualPause={!!r.soloPausedAt}
           userId={session.user.id}
           names={Object.fromEntries(
             Object.values(r.game.identities).map((m: any) => [
@@ -203,6 +395,10 @@ export default function Room() {
                     userId: m.userId,
                     displayName: m.displayName || m.name,
                     username: m.username,
+                    kind: m.kind,
+                    difficulty: m.difficulty,
+                    personality: m.personality,
+                    avatar: m.seat,
                   }}
                 />
                 <Txt muted size={13}>
@@ -268,6 +464,10 @@ export default function Room() {
                   userId: m.userId,
                   displayName: m.displayName || m.name,
                   username: m.username,
+                  kind: m.kind,
+                  difficulty: m.difficulty,
+                  personality: m.personality,
+                  avatar: m.seat,
                 }}
               />
               <Txt muted size={12}>

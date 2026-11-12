@@ -44,3 +44,5 @@ Production deployment and Android distribution have progressed beyond this initi
 Do not interpret passing local tests as store approval, licensed affiliation, successful external delivery or production certification.
 
 Release 1.1 adds bounded outgoing-card bonus actions, unique profile provisioning/backfill, canonical identities and swap feedback. All 92 automated tests and 14 release guards pass; see [the complete change record](SWAP_RELEASE_1.1.md). Physical-device acceptance remains unexecuted.
+
+AI 1.2 implements server-hosted solo/mixed bot games, five configurable difficulties and personalities, private memory/observations, durable scheduling, bonus-compatible actions, separate statistics, practice hints and rematches. **Offline play is deferred.** See [the implementation and measured calibration report](BOTS.md); Expert/Master ordering is not established by the benchmark, and physical-device visual/interaction checks remain outstanding.

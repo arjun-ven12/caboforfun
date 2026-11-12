@@ -9,6 +9,7 @@ import {
 } from "@cabo/shared";
 import { createApp, logger } from "./app.js";
 import { setIdentityPublisher } from "./identity.js";
+import { botController } from "./bot-controller.js";
 import { db } from "./db.js";
 import { auth } from "./auth.js";
 import { config, origins } from "./config.js";
@@ -29,22 +30,41 @@ const io = new Server<ClientEvents, ServerEvents>(http, {
 });
 const sockets = new Map<string, Set<string>>();
 setOnlineLookup((userId) => !!sockets.get(userId)?.size);
+const bots = botController(
+  (roomId, events, matchId) => publish(roomId, events, false, matchId),
+  (error) =>
+    logger.error(
+      {
+        code: error instanceof GameError ? error.code : "BOT_EXECUTION_FAILED",
+      },
+      "Bot scheduler failed",
+    ),
+);
 const turnNotifications = new Map<string, string>();
-async function publish(roomId: string, events: SwapEvent[] = []) {
+async function publish(
+  roomId: string,
+  events: SwapEvent[] = [],
+  refreshLobby = false,
+  originMatchId?: string,
+) {
+  bots.wake(roomId, Date.now(), refreshLobby);
   const members = await db.roomMember.findMany({ where: { roomId } });
   for (const m of members) {
     const ids = sockets.get(m.userId);
     if (!ids?.size) continue;
     const view = await roomView(roomId, m.userId);
     for (const id of ids) {
-      io.to(id).emit("room:changed", { roomId });
+      if (refreshLobby || view.status !== "playing")
+        io.to(id).emit("room:changed", { roomId });
       if (view.game) {
         io.to(id).emit("game:state", {
           ...view.game,
           roomId,
           serverTime: Date.now(),
         });
-        for (const event of events)
+        for (const event of originMatchId && originMatchId !== view.game.matchId
+          ? []
+          : events)
           io.to(id).emit("game:swap", {
             roomId,
             matchId: view.game.matchId,
@@ -71,7 +91,7 @@ async function publish(roomId: string, events: SwapEvent[] = []) {
       ) {
         turnNotifications.set(roomId, key);
         const userId = g.players[g.turn].id;
-        if (!sockets.get(userId)?.size)
+        if (!userId.startsWith("bot:") && !sockets.get(userId)?.size)
           await notify(
             userId,
             "your_turn",
@@ -82,7 +102,7 @@ async function publish(roomId: string, events: SwapEvent[] = []) {
     }
   }
 }
-setPublisher(publish);
+setPublisher((roomId) => publish(roomId, [], true));
 setIdentityPublisher(async (identity) => {
   const friends = await db.socialEdge.findMany({
     where: {
@@ -188,7 +208,7 @@ io.on("connection", (socket) => {
       await validateSession();
       const result = await command(userId, input);
       ack({ ok: true, data: result.view });
-      await publish(input.roomId, result.events);
+      await publish(input.roomId, result.events, false, result.matchId);
     } catch (e) {
       ack({
         ok: false,
@@ -231,7 +251,10 @@ const interval = setInterval(async () => {
       where: { status: "playing" },
       select: { id: true },
     });
-    for (const r of rooms) if (await tickRoom(r.id)) await publish(r.id);
+    for (const r of rooms) {
+      if (await tickRoom(r.id)) await publish(r.id);
+      bots.wake(r.id);
+    }
   } catch (err) {
     logger.error({ err }, "Scheduler failed");
   } finally {
@@ -246,6 +269,7 @@ async function shutdown() {
   if (stopping) return;
   stopping = true;
   clearInterval(interval);
+  bots.stop();
   const force = setTimeout(() => process.exit(1), 10000);
   force.unref();
   io.close();

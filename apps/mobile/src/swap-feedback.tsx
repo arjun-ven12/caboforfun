@@ -21,18 +21,35 @@ import type {
 } from "@cabo/shared";
 import { Panel, Txt, useTheme } from "./ui";
 import { usePreferences } from "./preferences";
+import { BotAvatar } from "./bot-avatar";
 const seen = new Map<string, number>();
 export function Identity({ person }: { person?: PublicIdentity }) {
   return (
-    <View style={{ flexShrink: 1, gap: 2 }}>
-      <Txt style={{ fontWeight: "600", flexShrink: 1 }}>
-        {person?.displayName || "Player"}
-      </Txt>
-      {person?.username && (
-        <Txt muted size={12} style={{ flexShrink: 1 }}>
-          @{person.username}
+    <View
+      style={{
+        flexDirection: "row",
+        gap: 9,
+        alignItems: "center",
+        flexShrink: 1,
+        minWidth: 0,
+      }}
+    >
+      {person?.kind === "bot" && <BotAvatar index={person.avatar} />}
+      <View style={{ flexShrink: 1, gap: 2 }}>
+        <Txt style={{ fontWeight: "600", flexShrink: 1 }}>
+          {person?.displayName || "Player"}
         </Txt>
-      )}
+        {person?.kind === "bot" && (
+          <Txt muted size={12}>
+            AI · {person.difficulty} · {person.personality}
+          </Txt>
+        )}
+        {person?.username && (
+          <Txt muted size={12} style={{ flexShrink: 1 }}>
+            @{person.username}
+          </Txt>
+        )}
+      </View>
     </View>
   );
 }
@@ -160,9 +177,11 @@ function FlyingBack({
 export function SwapSurface({
   children,
   event,
+  speed = 1,
 }: {
   children: React.ReactNode;
   event?: SwapEvent;
+  speed?: number;
 }) {
   const refs = useRef(new Map<string, NativeView>()),
     root = useRef<NativeView>(null),
@@ -188,7 +207,7 @@ export function SwapSurface({
         { ...b, x: b.x - r.x, y: b.y - r.y },
       ]);
       progress.value = 0;
-      progress.value = withTiming(1, { duration: 480 });
+      progress.value = withTiming(1, { duration: 480 / speed });
     })();
     return () => {
       live = false;
@@ -291,13 +310,16 @@ export function SwapBanner({
       <Panel>
         <View accessibilityLiveRegion="polite">
           <Txt size={14}>{swapMessage(event, viewer, people)}</Txt>
-          {[event.actorId, event.opponentId].map(
-            (id) =>
-              people[id]?.username && (
-                <Txt key={id} muted size={11}>
-                  @{people[id].username}
-                </Txt>
-              ),
+          {[event.actorId, event.opponentId].map((id) =>
+            people[id]?.kind === "bot" ? (
+              <Txt key={id} muted size={11}>
+                {people[id].displayName} · AI
+              </Txt>
+            ) : people[id]?.username ? (
+              <Txt key={id} muted size={11}>
+                @{people[id].username}
+              </Txt>
+            ) : null,
           )}
         </View>
       </Panel>

@@ -14,12 +14,16 @@ export function Table({
   game: g,
   userId,
   clockOffset,
+  animationSpeed = 1,
+  manualPause = false,
   names,
   send,
   busy,
 }: {
   game: AuthorizedGameView;
   clockOffset: number;
+  animationSpeed?: number;
+  manualPause?: boolean;
   userId: string;
   names: Record<string, string>;
   send: (c: Command) => void;
@@ -27,6 +31,7 @@ export function Table({
 }) {
   const c = useTheme(),
     [showHistory, setShowHistory] = useState(false),
+    [showMoves, setShowMoves] = useState(false),
     [selected, setSelected] = useState<number[]>([]),
     [target, setTarget] = useState<{ owner: string; index: number }>(),
     [time, setTime] = useState(Date.now());
@@ -55,7 +60,7 @@ export function Table({
     ? `${names[target.owner] || "Player"} · card ${target.index + 1}`
     : "";
   return (
-    <SwapSurface event={swap}>
+    <SwapSurface event={swap} speed={animationSpeed}>
       <View style={{ gap: 22 }}>
         <SwapBanner event={swap} viewer={userId} people={g.identities} />
         {active && g.activeAbility?.origin === "bonus" && (
@@ -78,7 +83,11 @@ export function Table({
         )}
         {g.pausedAt && (
           <Panel>
-            <Txt>The table is paused until everyone reconnects.</Txt>
+            <Txt>
+              {manualPause
+                ? "Your solo match is paused. Resume when you’re ready."
+                : "The table is paused until everyone reconnects."}
+            </Txt>
           </Panel>
         )}
         <Row>
@@ -88,7 +97,7 @@ export function Table({
           <Txt size={12} muted>
             {over
               ? "Round complete"
-              : `${Math.max(0, Math.ceil((g.deadline - time) / 1000))}s`}
+              : `${Math.max(0, Math.ceil((g.deadline - (g.pausedAt ?? time + clockOffset)) / 1000))}s`}
           </Txt>
         </Row>
         <View style={{ gap: 16 }}>
@@ -152,7 +161,7 @@ export function Table({
                 ? "A moment to remember."
                 : active
                   ? "Your turn."
-                  : `${names[g.turn] || "Your friend"} is thinking.`}
+                  : `${names[g.turn] || "Your friend"} ${g.phase === "drawn" ? "is drawing…" : "is thinking…"}`}
             </Txt>
             <View
               style={{ flexDirection: "row", gap: 26, alignItems: "center" }}
@@ -459,6 +468,43 @@ export function Table({
             )}
           </Panel>
         )}
+        {!!g.actionHistory?.length && (
+          <Panel>
+            <Button
+              secondary
+              title={showMoves ? "Hide turn history" : "View turn history"}
+              onPress={() => setShowMoves(!showMoves)}
+            />
+            {showMoves &&
+              g.actionHistory
+                .slice(-20)
+                .reverse()
+                .map((a) => (
+                  <Txt muted size={12} key={a.version}>
+                    {names[a.actorId] || "Player"} ·{" "}
+                    {a.type === "target" ||
+                    a.type === "finishAbility" ||
+                    a.type === "activate"
+                      ? "card action"
+                      : a.type === "resolveSwap"
+                        ? "resolved look-and-swap"
+                        : a.type === "replace"
+                          ? `replaced card positions ${a.indices?.map((i) => i + 1).join(", ")}`
+                          : a.type === "draw"
+                            ? `drew from ${a.source}`
+                            : a.type === "cabo"
+                              ? "called Cabo"
+                              : a.type === "inspect"
+                                ? "initial inspection"
+                                : a.type === "timeout"
+                                  ? "turn timer expired"
+                                  : a.type
+                                      .replace(/([a-z])([A-Z])/g, "$1 $2")
+                                      .toLowerCase()}
+                  </Txt>
+                ))}
+          </Panel>
+        )}
         {over && (
           <Panel>
             <Txt size={25}>
@@ -486,6 +532,7 @@ export function Table({
                   <Txt style={{ fontWeight: s.winner ? "700" : "400" }}>
                     {s.winner ? "✧ " : ""}
                     {names[s.id] || "Player"}
+                    {g.identities[s.id]?.kind === "bot" ? " · AI" : ""}
                   </Txt>
                   <Txt>
                     {s.raw} hand · {s.total} round

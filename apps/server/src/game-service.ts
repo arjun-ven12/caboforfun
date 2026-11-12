@@ -8,11 +8,14 @@ import {
   playerView,
   startGame,
   transition,
+  botConfigSchema,
+  type PublicIdentity,
   type Game,
   type Rules,
   type Envelope,
   type AuthorizedGameView,
 } from "@cabo/shared";
+import { observeAgents, type AgentMap } from "./bot-state.js";
 import { identities } from "./identity.js";
 import { db, json } from "./db.js";
 let isOnline: (userId: string) => boolean = () => false;
@@ -62,13 +65,28 @@ async function authorizedView(
   userId: string,
   matchId: string,
 ): Promise<AuthorizedGameView> {
+  const match = await tx.match.findUniqueOrThrow({
+    where: { id: matchId },
+    select: {
+      createdAt: true,
+      participants: { select: { userId: true, identity: true } },
+    },
+  });
   return {
     ...playerView(g, userId),
     matchId,
-    identities: await identities(
-      g.players.map((p) => p.id),
-      tx,
-    ),
+    matchStartedAt: match.createdAt.getTime(),
+    identities: {
+      ...(await identities(
+        g.players.map((p) => p.id),
+        tx,
+      )),
+      ...Object.fromEntries(
+        match.participants
+          .filter((p) => p.identity)
+          .map((p) => [p.userId, p.identity as unknown as PublicIdentity]),
+      ),
+    },
   };
 }
 export async function roomView(roomId: string, userId: string) {
@@ -76,6 +94,7 @@ export async function roomView(roomId: string, userId: string) {
   const room = await db.room.findUniqueOrThrow({
     where: { id: roomId },
     include: {
+      bots: { orderBy: { seat: "asc" } },
       members: {
         orderBy: { seat: "asc" },
         include: { user: { select: { name: true, profile: true } } },
@@ -90,12 +109,29 @@ export async function roomView(roomId: string, userId: string) {
   return {
     ...room,
     rules: rulesSchema.parse(room.rules),
-    members: room.members.map(({ user, ...m }) => ({
-      ...m,
-      name: user.profile?.displayName || user.name,
-      displayName: user.profile?.displayName || user.name,
-      username: user.profile?.username ?? null,
-    })),
+    members: [
+      ...room.members.map(({ user, ...m }) => ({
+        ...m,
+        name: user.profile?.displayName || user.name,
+        displayName: user.profile?.displayName || user.name,
+        username: user.profile?.username ?? null,
+        kind: "human",
+      })),
+      ...room.bots.map((b) => ({
+        id: b.id,
+        userId: `bot:${b.id}`,
+        name: b.name,
+        displayName: b.name,
+        username: null,
+        seat: b.seat,
+        kind: "bot",
+        ready: true,
+        rematch: true,
+        config: b.config,
+        difficulty: botConfigSchema.parse(b.config).difficulty,
+        personality: botConfigSchema.parse(b.config).personality,
+      })),
+    ].sort((a, b) => a.seat - b.seat),
     serverTime: Date.now(),
     game: snap
       ? await authorizedView(
@@ -107,15 +143,24 @@ export async function roomView(roomId: string, userId: string) {
       : null,
   };
 }
-async function saveState(
+export async function saveState(
   tx: Prisma.TransactionClient,
   matchId: string,
   roomId: string,
   g: Game,
+  agents?: AgentMap,
 ) {
+  const previous =
+    agents ??
+    ((await tx.gameSnapshot.findUniqueOrThrow({ where: { matchId } }))
+      .botState as unknown as AgentMap);
   await tx.gameSnapshot.update({
     where: { matchId },
-    data: { state: json(g), version: g.version },
+    data: {
+      state: json(g),
+      version: g.version,
+      botState: json(observeAgents(g, previous)),
+    },
   });
   if (g.scores.length) {
     await tx.round.upsert({
@@ -165,6 +210,7 @@ export async function command(userId: string, input: Envelope) {
         matchId: room.activeMatchId,
       };
     }
+    check(!room.soloPausedAt, "GAME_PAUSED");
     check(g.version === e.version, "STALE_VERSION", 409);
     const next = transition(g, userId, e.command, randomInt, Date.now());
     await saveState(tx, room.activeMatchId, e.roomId, next);
@@ -175,6 +221,7 @@ export async function command(userId: string, input: Envelope) {
         actionId: e.actionId,
         version: next.version,
         type: e.command.type,
+        round: g.round,
       },
     });
     return {
@@ -194,7 +241,10 @@ export async function startMatch(
   return locked(roomId, async (tx) => {
     const room = await tx.room.findUniqueOrThrow({
       where: { id: roomId },
-      include: { members: { orderBy: { seat: "asc" } } },
+      include: {
+        members: { orderBy: { seat: "asc" } },
+        bots: { orderBy: { seat: "asc" } },
+      },
     });
     check(room.hostId === userId, "HOST_ONLY", 403);
     check(
@@ -205,8 +255,32 @@ export async function startMatch(
       room.members.every((m) => (rematch ? m.rematch : m.ready)),
       "ALL_PLAYERS_MUST_ACCEPT",
     );
+    const seats = [
+      ...room.members.map((m) => ({ id: m.userId, seat: m.seat })),
+      ...room.bots.map((b) => ({ id: `bot:${b.id}`, seat: b.seat })),
+    ].sort((a, b) =>
+      a.id === room.hostId ? -1 : b.id === room.hostId ? 1 : a.seat - b.seat,
+    );
+    const agents: AgentMap = Object.fromEntries(
+      room.bots.map((b, index) => [
+        `bot:${b.id}`,
+        {
+          config: botConfigSchema.parse(b.config),
+          identity: {
+            userId: `bot:${b.id}`,
+            displayName: b.name,
+            username: null,
+            kind: "bot",
+            difficulty: botConfigSchema.parse(b.config).difficulty,
+            personality: botConfigSchema.parse(b.config).personality,
+            avatar: b.seat,
+          },
+          seed: randomInt(0x100000000),
+        },
+      ]),
+    );
     const g = startGame(
-      room.members.map((m) => m.userId),
+      seats.map((s) => s.id),
       room.rules as unknown as Rules,
       randomInt,
       Date.now(),
@@ -214,11 +288,30 @@ export async function startMatch(
     const match = await tx.match.create({
       data: {
         roomId,
+        kind: room.bots.length
+          ? room.members.length === 1
+            ? "solo"
+            : "mixed"
+          : "human",
         rules: room.rules as Prisma.InputJsonValue,
         previousId: rematch ? room.activeMatchId : undefined,
-        snapshot: { create: { state: json(g), version: g.version } },
+        snapshot: {
+          create: {
+            state: json(g),
+            version: g.version,
+            botState: json(observeAgents(g, agents)),
+          },
+        },
         participants: {
-          create: room.members.map((m) => ({ userId: m.userId })),
+          create: seats.map((s) => ({
+            userId: s.id,
+            ...(agents[s.id]
+              ? {
+                  identity: json(agents[s.id].identity),
+                  botConfig: json(agents[s.id].config),
+                }
+              : {}),
+          })),
         },
       },
     });
@@ -242,6 +335,7 @@ export async function tickRoom(roomId: string) {
   return locked(roomId, async (tx) => {
     const room = await tx.room.findUniqueOrThrow({ where: { id: roomId } });
     if (room.status !== "playing" || !room.activeMatchId) return false;
+    if (room.soloPausedAt) return false;
     const snap = await tx.gameSnapshot.findUniqueOrThrow({
       where: { matchId: room.activeMatchId },
     });

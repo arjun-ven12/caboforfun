@@ -1,0 +1,43 @@
+{
+  "checkedAt": "2026-11-12T04:45:48.619Z",
+  "apiUrl": "https://cabo-api-production.up.railway.app",
+  "status": "passed",
+  "transport": "Two programmatic authenticated HTTPS/WSS clients; not Android devices",
+  "botActionsObserved": [
+    "inspect",
+    "ready",
+    "draw",
+    "replace"
+  ],
+  "botSwapNotificationsReceived": 0,
+  "checks": [
+    {
+      "name": "Two ordinary authenticated accounts and WSS connections",
+      "status": "passed"
+    },
+    {
+      "name": "Atomic solo lobby with three independent bot levels and distinct AI identities",
+      "status": "passed"
+    },
+    {
+      "name": "Autonomous bot final turns, authoritative revealed scoring and separate solo statistics",
+      "status": "passed"
+    },
+    {
+      "name": "Explicit rematch and immutable historical bot identities/configuration",
+      "status": "passed"
+    },
+    {
+      "name": "Persisted solo pause/resume and restart with preserved bot settings",
+      "status": "passed"
+    },
+    {
+      "name": "Mixed human/bot room completion; multiplayer pause/practice rejected; rankings kept separate",
+      "status": "passed"
+    },
+    {
+      "name": "Private bot observations and memory absent from every observed human socket/API view",
+      "status": "passed"
+    }
+  ]
+}

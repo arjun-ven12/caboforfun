@@ -62,6 +62,13 @@ export default function Activity() {
         <Panel key={item.id}>
           {path === "matches" ? (
             <>
+              <Txt muted size={12}>
+                {item.match.kind === "solo"
+                  ? "SOLO · AI opponents"
+                  : item.match.kind === "mixed"
+                    ? "MIXED · humans & AI"
+                    : "HUMAN MULTIPLAYER"}
+              </Txt>
               <Row>
                 <Txt size={20}>
                   {item.winner ? "A winning hand." : "A game well played."}
@@ -77,7 +84,7 @@ export default function Activity() {
                   {r.scores
                     .map(
                       (s: any) =>
-                        `${item.match.identities?.[s.id]?.displayName || "Former player"} ${item.match.identities?.[s.id]?.username ? `@${item.match.identities[s.id].username}` : ""}: ${s.raw} hand / ${s.total} round`,
+                        `${item.match.identities?.[s.id]?.displayName || "Former player"}${item.match.identities?.[s.id]?.kind === "bot" ? " · AI" : ""} ${item.match.identities?.[s.id]?.username ? `@${item.match.identities[s.id].username}` : ""}: ${s.raw} hand / ${s.total} round`,
                     )
                     .join(" · ")}
                 </Txt>

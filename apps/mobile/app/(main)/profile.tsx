@@ -80,7 +80,7 @@ export default function Profile() {
         }}
       />
       <Panel>
-        <Txt size={21}>Your game, in numbers.</Txt>
+        <Txt size={21}>Human multiplayer.</Txt>
         <Row>
           <Txt muted>Played</Txt>
           <Txt>{stats.data?.games || 0}</Txt>
@@ -100,6 +100,70 @@ export default function Profile() {
           <Txt>{(stats.data?.averageHand || 0).toFixed(1)}</Txt>
         </Row>
       </Panel>
+      {stats.data?.solo && (
+        <Panel>
+          <Txt size={21}>Solo · against AI</Txt>
+          <Row>
+            <Txt muted>Played / wins / losses</Txt>
+            <Txt>
+              {stats.data.solo.games} / {stats.data.solo.wins} /{" "}
+              {stats.data.solo.losses}
+            </Txt>
+          </Row>
+          <Row>
+            <Txt muted>Win rate</Txt>
+            <Txt>{Math.round(stats.data.solo.winRate * 100)}%</Txt>
+          </Row>
+          <Row>
+            <Txt muted>Average / best hand</Txt>
+            <Txt>
+              {stats.data.solo.averageHand.toFixed(1)} /{" "}
+              {stats.data.solo.bestHand ?? "—"}
+            </Txt>
+          </Row>
+          <Row>
+            <Txt muted>Successful Cabo calls</Txt>
+            <Txt>
+              {stats.data.solo.successfulCaboCalls} /{" "}
+              {stats.data.solo.caboCalls}
+            </Txt>
+          </Row>
+          <Row>
+            <Txt muted>Longest winning streak</Txt>
+            <Txt>{stats.data.solo.longestStreak}</Txt>
+          </Row>
+          <Txt size={16}>By difficulty</Txt>
+          <Txt muted size={12}>
+            A mixed-difficulty match appears under each participating level.
+          </Txt>
+          {Object.entries(stats.data.solo.byDifficulty).map(
+            ([name, v]: [string, any]) =>
+              v.games > 0 && (
+                <Row key={name}>
+                  <Txt muted size={13}>
+                    {name}
+                  </Txt>
+                  <Txt size={13}>
+                    {v.wins}/{v.games} · {Math.round(v.winRate * 100)}%
+                  </Txt>
+                </Row>
+              ),
+          )}
+          <Txt size={16}>By rules</Txt>
+          {Object.entries(stats.data.solo.byRules).map(
+            ([name, v]: [string, any]) => (
+              <Row key={name}>
+                <Txt muted size={13}>
+                  {name}
+                </Txt>
+                <Txt size={13}>
+                  {v.wins}/{v.games}
+                </Txt>
+              </Row>
+            ),
+          )}
+        </Panel>
+      )}
       <Button
         secondary
         title="Match history"

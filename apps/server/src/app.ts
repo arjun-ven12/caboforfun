@@ -99,7 +99,7 @@ export function createApp() {
     }
     const invite = await db.invitation.findUnique({
       where: { tokenHash: hash(token) },
-      include: { room: { include: { members: true } } },
+      include: { room: { include: { members: true, bots: true } } },
     });
     const valid = invite && !invite.revoked && invite.expiresAt > new Date();
     let message = "This invitation has expired or was revoked.";
@@ -110,7 +110,8 @@ export function createApp() {
           ? "This room was cancelled."
           : invite.room.status !== "lobby"
             ? "This game has already started."
-            : invite.room.members.length >= r.maxPlayers
+            : invite.room.members.length + invite.room.bots.length >=
+                r.maxPlayers
               ? "This room is full."
               : "A seat at the table is waiting for you.";
     }

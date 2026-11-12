@@ -23,6 +23,14 @@ export type AbilityAction = {
   origin: "draw" | "bonus";
   depth: number;
 };
+export type PublicAction = {
+  version: number;
+  round: number;
+  actorId: string;
+  type: Command["type"] | "timeout";
+  indices?: number[];
+  source?: "deck" | "discard";
+};
 export type Player = {
   id: string;
   hand: Card[];
@@ -39,6 +47,8 @@ export type Score = {
 };
 export type Game = {
   version: number;
+  turnNumber?: number;
+  reshuffles?: number;
   rules: Rules;
   players: Player[];
   deck: Card[];
@@ -61,6 +71,8 @@ export type Game = {
   bonusesGranted?: number;
   swapSequence?: number;
   swapHistory?: SwapEvent[];
+  lastAction?: PublicAction;
+  actionHistory?: PublicAction[];
   reveal?: { owner: string; index: number };
   caller?: string;
   finalTurns: string[];
@@ -146,6 +158,8 @@ export function startGame(
   const starter = r.variant === "official" ? randomInt(ids.length) : 0;
   return {
     version: 1,
+    turnNumber: 0,
+    reshuffles: 0,
     rules: r,
     players,
     deck,
@@ -165,6 +179,7 @@ export function startGame(
     bonusesGranted: 0,
     swapSequence: 0,
     swapHistory: [],
+    actionHistory: [],
   };
 }
 export function scoreRound(g: Game): Score[] {
@@ -248,6 +263,7 @@ function endRound(g: Game) {
   g.bonusesGranted = 0;
 }
 function endTurn(g: Game, now: number) {
+  g.turnNumber = (g.turnNumber ?? 0) + 1;
   const actor = g.players[g.turn].id;
   delete g.activeAbility;
   g.bonusQueue = [];
@@ -282,6 +298,7 @@ function drawDeck(
       endRound(g);
       return;
     }
+    g.reshuffles = (g.reshuffles ?? 0) + 1;
     const top = g.discard.pop()!;
     g.deck = shuffle(g.discard, randomInt);
     g.discard = [top];
@@ -304,7 +321,16 @@ function completeAbility(g: Game, now: number) {
   }
   delete g.reveal;
   delete g.activeAbility;
-  const next = g.bonusQueue?.shift();
+  let next = g.bonusQueue?.shift();
+  while (
+    next &&
+    !abilityCanResolve(
+      playerView(g, g.players[g.turn].id),
+      g.players[g.turn].id,
+      next.ability,
+    )
+  )
+    next = g.bonusQueue?.shift();
   if (next) {
     g.activeAbility = next;
     g.phase = "ability";
@@ -383,6 +409,7 @@ export function transition(
     requireGame(actor === g.players[0].id, "HOST_ONLY");
     g.phase = "matchOver";
     g.version++;
+    recordPublicAction(g, actor, c);
     return g;
   }
   if (c.type === "nextRound") {
@@ -405,7 +432,7 @@ export function transition(
               g.scores.find((s) => s.id === g.players[i].id)?.total === min,
           )!
         : g.round % g.players.length;
-    return {
+    const advanced: Game = {
       ...next,
       version: g.version + 1,
       round: g.round + 1,
@@ -416,7 +443,10 @@ export function transition(
       resets: g.resets,
       swapHistory: g.swapHistory ?? [],
       swapSequence: g.swapSequence ?? 0,
+      actionHistory: g.actionHistory ?? [],
     };
+    recordPublicAction(advanced, actor, c);
+    return advanced;
   }
   if (c.type === "inspect") {
     requireGame(g.phase === "memory" && !p.ready, "WRONG_PHASE");
@@ -498,6 +528,7 @@ export function transition(
             if (penalty) p.hand.push(penalty);
             if (["roundOver", "matchOver"].includes(g.phase)) {
               g.version++;
+              recordPublicAction(g, actor, c);
               return g;
             }
           }
@@ -510,18 +541,22 @@ export function transition(
           if (penalty) p.hand.push(penalty);
           if (["roundOver", "matchOver"].includes(g.phase)) {
             g.version++;
+            recordPublicAction(g, actor, c);
             return g;
           }
         }
       } else {
+        const oldIds = p.hand.map((c) => c.id),
+          oldRevisions = p.slotRevisions ?? p.hand.map(() => 0);
         g.discard.push(...cards);
         if (g.rules.variant === "official" && g.drawn.source === "discard")
           g.faceUp.push(g.drawn.card.id);
         p.hand[ids[0]] = g.drawn.card;
-        p.slotRevisions ??= p.hand.map(() => 0);
-        p.slotRevisions[ids[0]] = (p.slotRevisions[ids[0]] ?? 0) + 1;
-        for (const i of ids.slice(1).reverse()) p.slotRevisions.splice(i, 1);
         for (const i of ids.slice(1).reverse()) p.hand.splice(i, 1);
+        p.slotRevisions = p.hand.map(
+          (card, index) =>
+            (oldRevisions[index] ?? 0) + (oldIds[index] === card.id ? 0 : 1),
+        );
       }
       endTurn(g, now);
     } else if (c.type === "activate") {
@@ -531,6 +566,10 @@ export function transition(
           g.rules.abilities &&
           g.drawn.card.ability !== "none",
         "NO_ABILITY",
+      );
+      requireGame(
+        abilityCanResolve(playerView(g, actor), actor, g.drawn.card.ability),
+        "NO_TARGETS",
       );
       g.activeAbility = {
         ability: g.drawn.card.ability as Exclude<Ability, "none">,
@@ -590,6 +629,7 @@ export function transition(
     }
   }
   g.version++;
+  recordPublicAction(g, actor, c);
   return g;
 }
 // Server-only scheduler. No client can submit a timeout command.
@@ -611,6 +651,7 @@ export function expire(
     endTurn(g, now);
   }
   g.version++;
+  recordPublicAction(g, state.players[state.turn].id, { type: "timeout" });
   return g;
 }
 export function matchWinners(g: Game): string[] {
@@ -648,7 +689,11 @@ export function playerView(g: Game, viewer: string) {
     active = g.players[g.turn].id === viewer;
   return {
     version: g.version,
+    turnNumber: g.turnNumber ?? 0,
+    reshuffles: g.reshuffles ?? 0,
     swapHistory: g.swapHistory ?? [],
+    lastAction: g.lastAction,
+    actionHistory: g.actionHistory ?? [],
     activeAbility: active ? g.activeAbility : undefined,
     bonusQueue: active ? g.bonusQueue : undefined,
     forfeit: g.forfeit,
@@ -698,3 +743,135 @@ export function playerView(g: Game, viewer: string) {
   };
 }
 export type PlayerView = ReturnType<typeof playerView>;
+
+/** Observable legal candidates. Hidden matching attempts may fail normally; no secret values are consulted. */
+export function legalActions(
+  v: PlayerView,
+  actor: string,
+  now: number,
+): Command[] {
+  const p = v.players.find((p) => p.id === actor);
+  if (!p || v.pausedAt !== undefined) return [];
+  const own = p.cards.map((c) => c.index),
+    out: Command[] = [];
+  function combinations(
+    a: number[],
+    n: number,
+    from = 0,
+    prefix: number[] = [],
+  ): number[][] {
+    if (!n) return [prefix];
+    return a
+      .slice(from)
+      .flatMap((x, i) => combinations(a, n - 1, from + i + 1, [...prefix, x]));
+  }
+  if (v.phase === "memory") {
+    if (p.ready) return [];
+    if ((p.inspected?.length ?? 0) === v.rules.initialPeek)
+      return [{ type: "ready" }];
+    return combinations(own, v.rules.initialPeek).map((indices) => ({
+      type: "inspect",
+      indices,
+    }));
+  }
+  if (v.phase === "roundOver")
+    return v.players[0].id === actor
+      ? [
+          { type: "nextRound" },
+          ...(v.rules.mode === "unlimited"
+            ? [{ type: "finishMatch" } as Command]
+            : []),
+        ]
+      : [];
+  if (v.phase === "matchOver" || v.turn !== actor || now >= v.deadline)
+    return [];
+  if (
+    !v.caller &&
+    ((v.rules.caboTiming === "start" && v.phase === "turn") ||
+      (v.rules.caboTiming === "afterDeckDraw" &&
+        v.phase === "drawn" &&
+        v.drawn?.source === "deck"))
+  )
+    out.push({ type: "cabo" });
+  if (v.phase === "turn") {
+    out.push({ type: "draw", source: "deck" });
+    if (v.discard) out.push({ type: "draw", source: "discard" });
+  }
+  if (v.phase === "drawn" && v.drawn) {
+    out.push(
+      ...own.map((index) => ({ type: "replace" as const, indices: [index] })),
+    );
+    // Bounded matching candidates prevent combinatorial work on pathological penalty hands.
+    if (v.rules.matching)
+      for (let n = 2; n <= Math.min(4, own.length); n++)
+        out.push(
+          ...combinations(own.slice(0, 10), n).map((indices) => ({
+            type: "replace" as const,
+            indices,
+          })),
+        );
+    if (v.drawn.source === "deck") {
+      out.push({ type: "discard" });
+      if (
+        v.rules.abilities &&
+        v.drawn.card.ability !== "none" &&
+        abilityCanResolve(v, actor, v.drawn.card.ability)
+      )
+        out.push({ type: "activate" });
+    }
+  }
+  const ability = v.activeAbility?.ability ?? v.drawn?.card.ability;
+  if (v.phase === "ability") {
+    if (v.reveal) return [{ type: "finishAbility" }];
+    for (const target of v.players) {
+      if ((ability === "peekOwn") !== (target.id === actor)) continue;
+      for (const card of target.cards) {
+        if (card.card) continue;
+        if (ability === "blindSwap")
+          for (const index of own) {
+            if (out.length >= 4096) return out;
+            out.push({
+              type: "target",
+              owner: target.id,
+              index: card.index,
+              ownIndex: index,
+            });
+          }
+        else out.push({ type: "target", owner: target.id, index: card.index });
+      }
+    }
+  }
+  if (v.phase === "lookSwap" && v.reveal) {
+    if (v.rules.optionalSwap) out.push({ type: "resolveSwap" });
+    out.push(
+      ...own.map((ownIndex) => ({ type: "resolveSwap" as const, ownIndex })),
+    );
+  }
+  return out;
+}
+
+function abilityCanResolve(view: PlayerView, actor: string, ability: Ability) {
+  if (ability === "none") return false;
+  return view.players.some(
+    (p) =>
+      (ability === "peekOwn" ? p.id === actor : p.id !== actor) &&
+      p.cards.some((s) => !s.card),
+  );
+}
+
+function recordPublicAction(
+  g: Game,
+  actorId: string,
+  command: Command | { type: "timeout" },
+) {
+  const event: PublicAction = {
+    version: g.version,
+    round: g.round,
+    actorId,
+    type: command.type,
+    ...(command.type === "replace" ? { indices: [...command.indices] } : {}),
+    ...(command.type === "draw" ? { source: command.source } : {}),
+  };
+  g.lastAction = event;
+  g.actionHistory = [...(g.actionHistory ?? []), event].slice(-50);
+}

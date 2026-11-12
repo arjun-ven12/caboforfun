@@ -69,3 +69,14 @@ The default extended-absence policy forfeits the match after the configured grac
 `AuthorizedGameView` adds `matchId` and current database-backed `identities` to the private engine projection. `swapHistory` contains at most 50 public swaps, retained across rounds and reconnects. Each hand slot has a `revision` that changes on replacement/exchange. Only the acting player receives `activeAbility` and `bonusQueue`; these contain typed ability/origin/depth, never outgoing card identities. Bonus actions use the existing `target`, `resolveSwap` and `finishAbility` commands. A bonus has no `drawn` card; clients must read `activeAbility.ability`. The exchange, queue and history commit atomically. Deadlines bound the whole turn including bonuses.
 
 The immutable snapshot settings are `activateSwappedOutAbilities` (custom default true, classic/legacy false), `chainSwapBonuses` (false), and `maxBonusActions` (1, valid 1–8). The count is the total bonuses per turn, excluding the original drawn action. Declined swaps and ordinary hand replacements do not generate bonuses.
+
+## AI/solo additions (1.2)
+
+- `POST /rooms/solo {rules,bots:[{name,config}],options:{fast,practice,animationSpeed}}` creates one human plus bot seats atomically. The normal ready/start and private initial inspection flow follows.
+- `GET/POST /bots/presets`, `DELETE /bots/presets/:id`: account-owned saved difficulty configurations.
+- `POST /rooms/:id/bots`, `PUT/DELETE /rooms/:id/bots/:botId`: host-only lobby/finished-roster controls; human readiness is cleared after a change.
+- `PUT /rooms/:id/bot-options`: host pacing/practice/motion settings. Practice requires one human.
+- `POST /rooms/:id/solo {action}`: pause/resume/restart/abandon/lobby, one-human rooms only.
+- `GET /rooms/:id/practice`: solo-only, authorized-view suggestion/reason; revealed round review after completion.
+
+Bots use the existing command/state/swap protocol; no client may submit a bot identity as the authenticated actor. Authorized identities add `kind`, difficulty/personality and avatar index; bot username is null. `matchStartedAt` orders different match IDs, while version orders updates within a match. Public action history omits private inspected indices/identities. Turn and shuffle counters aid legitimate memory. `botState`, memory and PRNG are confidential snapshot fields, absent from all room/API/socket payloads.
